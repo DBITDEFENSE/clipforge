@@ -14,12 +14,16 @@ export const DiagramFlow: React.FC<{props: Record<string, any>; elapsed: number;
   const boxH = Math.min(150, h / (n * 1.55));
   const gap = (h - boxH * n) / Math.max(n - 1, 1);
   const centers = nodes.map((_, i) => top + i * (boxH + gap) + boxH / 2);
-  const perNode = 9;
-  const travelStart = n * perNode;
-  const travel = interpolate(elapsed, [travelStart, travelStart + 26], [0, n - 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+  // Fast build (~1.1s for 3 nodes) so even a 1.5s shot shows the whole flow; the packet then keeps looping.
+  const perNode = 5;
+  const travelStart = n * perNode + 2;
+  const travelLen = 16;
+  const cycle = Math.max(0, elapsed - travelStart);
+  const phase = cycle < travelLen ? cycle : (cycle - travelLen) % (travelLen + 10); // first pass, then loop with a short pause
+  const travel = interpolate(Math.min(phase, travelLen), [0, travelLen], [0, n - 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   const seg = Math.min(Math.floor(travel), n - 2);
   const packetY = centers[seg] + (centers[seg + 1] - centers[seg]) * (travel - seg);
-  const reached = (i: number) => travel >= i - 0.02 && elapsed >= travelStart;
+  const reached = (i: number) => elapsed >= travelStart && (cycle >= travelLen || travel >= i - 0.02);
   return (
     <div style={{position: 'absolute', inset: 0}}>
       {centers.slice(0, -1).map((y, i) => {

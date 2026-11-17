@@ -71,7 +71,10 @@ def make(
 
 
 @app.command()
-def redo(short_ids: list[str] = typer.Argument(..., help="Short IDs to re-direct and re-render (voice is reused, no TTS cost)")):
+def redo(
+    short_ids: list[str] = typer.Argument(..., help="Short IDs to re-direct and re-render (voice is reused, no TTS cost)"),
+    keep_shots: bool = typer.Option(False, "--keep-shots", help="Reuse the existing shot plan too (render-only, no Claude calls)"),
+):
     """Re-run shots -> render -> finish -> QA for existing shorts, keeping their script and voice."""
     from .config import WORK
 
@@ -85,7 +88,7 @@ def redo(short_ids: list[str] = typer.Argument(..., help="Short IDs to re-direct
             topic=script.title, cluster="manual", category="cyber", key_facts=[], angle="", who_affected="", how_it_works="",
             sources=[], scores={"hook": 0, "clarity": 0, "curiosity": 0, "niche_fit": 0})
         results.append(pipeline.produce(sid, row["batch_id"] if row else "manual", story, script, (row["day"] or 0) if row else 0,
-                                        reuse_voice=True))
+                                        reuse_voice=True, keep_shots=keep_shots))
     _summary(results, time.time() - t)
     gallery(True)
 

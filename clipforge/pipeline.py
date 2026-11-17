@@ -19,6 +19,24 @@ from .transcribe import transcribe
 console = Console()
 
 
+def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: Path) -> dict:
+    """Claude-directed shots; on any failure, the deterministic planner. Always returns a validated doc."""
+    try:
+        console.print(f"[cyan]direct[/] {short_id}")
+        plan = director.direct(script, words, short_id)
+        (work / "shot_plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+        doc, notes = director.to_doc(plan, script, words, short_id, work)
+        if notes:
+            console.print(f"  director repairs: {'; '.join(notes[:6])}")
+        return doc
+    except Exception as e:
+        console.print(f"[yellow]director failed ({e}); using the built-in planner[/]")
+        doc = shots.build(script, words, short_id)
+        doc["planner"] = f"fallback: {str(e)[:200]}"
+        shots.validate(doc)
+        return doc
+
+
 def transcribe_pending() -> list[dict]:
     """Transcribe every new inbox video. Returns the batch: [{hash, title, transcript}]."""
     batch = []
@@ -48,7 +66,7 @@ def _sources_txt(story: Story) -> str:
 
 
 def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int, voice_provider: str | None = None,
-            reuse_voice: bool = False) -> dict:
+            reuse_voice: bool = False, keep_shots: bool = False) -> dict:
     """Script -> finished short. Returns a status dict; never raises."""
     work = WORK / "shorts" / short_id
     work.mkdir(parents=True, exist_ok=True)
@@ -64,18 +82,12 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
             console.print(f"[cyan]voice[/] {short_id}: {script.title}")
             words = voice.synthesize(script, short_id, work, voice_provider)
 
-        try:
-            console.print(f"[cyan]direct[/] {short_id}")
-            plan = director.direct(script, words, short_id)
-            (work / "shot_plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-            doc, notes = director.to_doc(plan, script, words, short_id, work)
-            if notes:
-                console.print(f"  director repairs: {'; '.join(notes[:6])}")
-        except Exception as e:
-            console.print(f"[yellow]director failed ({e}); using the built-in planner[/]")
-            doc = shots.build(script, words, short_id)
-            doc["planner"] = f"fallback: {str(e)[:200]}"
+        if keep_shots and (work / "shots.json").exists():
+            console.print(f"[cyan]shots[/] {short_id}: reusing existing shot plan")
+            doc = json.loads((work / "shots.json").read_text(encoding="utf-8"))
             shots.validate(doc)
+        else:
+            doc = _direct_or_fallback(script, words, short_id, work)
         shots_path = work / "shots.json"
         shots_path.write_text(json.dumps(doc, indent=1), encoding="utf-8")
 
