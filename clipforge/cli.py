@@ -49,6 +49,8 @@ def run(
     t = time.time()
     results = pipeline.run(voice)
     _summary(results, time.time() - t)
+    if results:
+        gallery(True)
 
 
 @app.command()
@@ -116,12 +118,22 @@ def doctor():
 
 
 @app.command()
-def review():
-    """(Phase 3) Local review page. For now, open the out/ folder."""
-    from .config import OUT
+def gallery(open_it: bool = typer.Option(True, "--open/--no-open")):
+    """Build out/gallery.html (every short with player, caption, hooks) and open it."""
+    from . import gallery as g
 
-    console.print("Review page lands in Phase 3. Opening out/ for now.")
-    subprocess.run(["explorer", str(OUT)])
+    path = g.build()
+    console.print(f"gallery: {path}")
+    if open_it:
+        import webbrowser
+
+        webbrowser.open(path.as_uri())
+
+
+@app.command()
+def review():
+    """(Phase 3: approve/reject/regenerate.) For now, opens the gallery."""
+    gallery(True)
 
 
 def _summary(results: list[dict], secs: float):
