@@ -71,6 +71,26 @@ def make(
 
 
 @app.command()
+def redo(short_ids: list[str] = typer.Argument(..., help="Short IDs to re-direct and re-render (voice is reused, no TTS cost)")):
+    """Re-run shots -> render -> finish -> QA for existing shorts, keeping their script and voice."""
+    from .config import WORK
+
+    results, t = [], time.time()
+    for sid in short_ids:
+        work = WORK / "shorts" / sid
+        script = Script.model_validate_json((work / "script.json").read_text(encoding="utf-8"))
+        with db.connect() as con:
+            row = con.execute("SELECT data, day, batch_id FROM stories WHERE id=?", (sid,)).fetchone()
+        story = Story.model_validate_json(row["data"]) if row else Story(
+            topic=script.title, cluster="manual", category="cyber", key_facts=[], angle="", who_affected="", how_it_works="",
+            sources=[], scores={"hook": 0, "clarity": 0, "curiosity": 0, "niche_fit": 0})
+        results.append(pipeline.produce(sid, row["batch_id"] if row else "manual", story, script, (row["day"] or 0) if row else 0,
+                                        reuse_voice=True))
+    _summary(results, time.time() - t)
+    gallery(True)
+
+
+@app.command()
 def setup(port: int = typer.Option(8788)):
     """Open a local page to paste API keys (validated, saved to .env)."""
     from .setup_page import serve

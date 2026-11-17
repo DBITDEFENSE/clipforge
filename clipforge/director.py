@@ -30,19 +30,20 @@ def direct(script: Script, words: list[Word], short_id: str) -> ShotPlan:
 def _props(s: DirectedShot) -> dict:
     t = s.type
     if t == "kinetic":
-        return {"text": s.text or ""}
+        return {"text": s.text}
     if t == "headline":
-        return {"headline": s.headline or s.text or "", "kicker": s.kicker or ""}
+        return {"headline": s.text, "kicker": s.kicker}
     if t == "stat":
-        return {"value": s.stat_value or "", "label": s.stat_label or ""}
+        return {"value": s.value, "label": s.label}
     if t == "code":
-        return {"language": s.code_language or "code", "lines": s.code_lines or [], "highlight": s.code_highlight}
+        return {"language": s.code_language or "code", "lines": s.lines, "highlight": s.highlight or None}
     if t == "terminal":
-        return {"lines": s.terminal_lines or []}
+        return {"lines": s.lines}
     if t == "diagram":
-        return {"nodes": (s.nodes or [])[:4], "label": s.flow_label or "", "danger": s.danger_node}
+        return {"nodes": s.lines[:4], "label": s.label, "danger": s.highlight if s.highlight >= 0 else None}
     if t == "cve":
-        return {"cve_id": s.cve_id or "", "cvss": s.cvss, "severity": s.severity or "", "product": s.product or ""}
+        sev = s.kicker.upper() if s.kicker.upper() in {"LOW", "MEDIUM", "HIGH", "CRITICAL"} else ""
+        return {"cve_id": s.value, "cvss": s.score if s.score > 0 else None, "severity": sev, "product": s.label}
     return {}
 
 
@@ -122,7 +123,7 @@ def to_doc(plan: ShotPlan, script: Script, words: list[Word], short_id: str, wor
         if typ == "broll":
             src = broll.fetch(s.broll_query, workdir / f"broll_{broll_n}.mp4")
             if src:
-                props = {"src": src.name, "text": s.text or "", "credit": broll.last_credit()}
+                props = {"src": src.name, "text": s.text, "credit": broll.last_credit()}
                 broll_n += 1
             else:
                 typ, props = "kinetic", {"text": s.text or s.broll_query}

@@ -108,29 +108,22 @@ MotionKind = Literal["pop", "punch_in", "drift", "none"]
 
 
 class DirectedShot(BaseModel):
-    start_word: int = Field(description="Index of the word where this shot begins (shots must start on word boundaries; first shot = 0)")
+    """Every field is required (structured outputs caps optional fields); use "" / [] / 0 / -1 for 'not used'."""
+    start_word: int = Field(description="Index of the word where this shot begins (first shot = 0)")
     type: ShotKind
     motion: MotionKind
-    card_key: Optional[str] = Field(default=None, description="Shots sharing a card_key continue the same card animation (e.g. one terminal typing across 3 shots)")
-    text: Optional[str] = Field(default=None, description="kinetic: <= 5 words, *wrap* the accent word(s). broll: optional <= 4 word overlay")
-    headline: Optional[str] = Field(default=None, description="headline: <= 9 words")
-    kicker: Optional[str] = Field(default=None, description="headline: short tag line")
-    stat_value: Optional[str] = None
-    stat_label: Optional[str] = None
-    code_language: Optional[str] = None
-    code_lines: Optional[list[str]] = Field(default=None, description="code: 3-9 short illustrative lines, never a working exploit")
-    code_highlight: Optional[int] = None
-    terminal_lines: Optional[list[str]] = Field(default=None, description="terminal: 3-8 lines, commands prefixed '$ ', illustrative only")
-    nodes: Optional[list[str]] = Field(default=None, description="diagram: 2-4 node labels in flow order, <= 2 words each (e.g. Attacker, VPN, Server)")
-    flow_label: Optional[str] = Field(default=None, description="diagram: <= 4 word label for what moves along the arrows")
-    danger_node: Optional[int] = Field(default=None, description="diagram: 0-based index of the compromised/victim node (drawn in warning color)")
-    cve_id: Optional[str] = None
-    cvss: Optional[float] = None
-    severity: Optional[Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]] = None
-    product: Optional[str] = Field(default=None, description="cve: affected product, <= 5 words")
-    broll_query: Optional[str] = Field(default=None, description="broll: 2-4 word stock-footage search (concrete, filmable: 'server room lights', 'typing keyboard dark')")
-    lower_title: Optional[str] = Field(default=None, description="Optional lower-third overlay title (a name, vendor, or source), <= 4 words")
-    lower_sub: Optional[str] = Field(default=None, description="Optional lower-third subtitle, <= 6 words")
+    card_key: str = Field(description="Shots sharing a non-empty card_key continue the same card animation; '' if none")
+    text: str = Field(description="kinetic: <= 5 words, *wrap* accent word(s). headline: the <= 9 word headline. broll: optional <= 4 word overlay. Else ''")
+    kicker: str = Field(description="headline: short tag line (e.g. 'CVE-2025-1234 · CVSS 9.8'). cve: severity LOW/MEDIUM/HIGH/CRITICAL. Else ''")
+    value: str = Field(description="stat: the number as shown ('38,490', '$6.3B'). cve: the CVE ID. Else ''")
+    label: str = Field(description="stat: what it counts (<= 6 words). cve: affected product. diagram: what travels the arrows (<= 4 words). Else ''")
+    score: float = Field(description="cve: CVSS 0-10. Else 0")
+    lines: list[str] = Field(description="code: 3-9 illustrative lines. terminal: 3-8 lines, commands prefixed '$ '. diagram: 2-4 node labels in flow order. Else []")
+    code_language: str = Field(description="code: language label (python, bash, http, yaml). Else ''")
+    highlight: int = Field(description="code: 1-based line to highlight, 0 for none. diagram: 0-based index of the compromised node, -1 for none")
+    broll_query: str = Field(description="broll: 2-4 word filmable stock search ('server room lights'). Else ''")
+    lower_title: str = Field(description="Optional lower-third title (vendor, actor, source), <= 4 words; '' for none")
+    lower_sub: str = Field(description="Lower-third subtitle, <= 6 words; '' for none")
 
 
 class ShotPlan(BaseModel):

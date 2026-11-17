@@ -7,14 +7,17 @@ def test_director_repairs_a_sloppy_plan(tmp_path):
     s = make_script()
     words = make_words(s)
     n = len(words)
+    E = dict(card_key="", text="", kicker="", value="", label="", score=0, lines=[], code_language="", highlight=0,
+             broll_query="", lower_title="", lower_sub="")
+    S = lambda **kw: DirectedShot(**(E | kw))  # noqa: E731
     plan = ShotPlan(shots=[
-        DirectedShot(start_word=3, type="kinetic", motion="pop", text="Front door *open*"),   # doesn't start at 0
-        DirectedShot(start_word=12, type="cve", motion="punch_in", card_key="c", cve_id="CVE-2025-0001", cvss=9.8),
-        DirectedShot(start_word=13, type="kinetic", motion="pop", text="too short"),          # < 0.7s -> merged
-        DirectedShot(start_word=30, type="terminal", motion="drift", card_key="t", terminal_lines=["$ x", "y"]),  # long -> split
-        DirectedShot(start_word=31, type="code", motion="pop"),                               # unusable (no lines) -> dropped
-        DirectedShot(start_word=n + 5, type="kinetic", motion="pop", text="out of range"),     # dropped
-        DirectedShot(start_word=n - 6, type="broll", motion="drift", broll_query="server room", text="Patch *today*"),
+        S(start_word=3, type="kinetic", motion="pop", text="Front door *open*"),   # doesn't start at 0
+        S(start_word=12, type="cve", motion="punch_in", card_key="c", value="CVE-2025-0001", score=9.8, kicker="CRITICAL"),
+        S(start_word=13, type="kinetic", motion="pop", text="too short"),          # < 0.7s -> merged
+        S(start_word=30, type="terminal", motion="drift", card_key="t", lines=["$ x", "y"]),  # long -> split
+        S(start_word=31, type="code", motion="pop"),                               # unusable (no lines) -> dropped
+        S(start_word=n + 5, type="kinetic", motion="pop", text="out of range"),    # dropped
+        S(start_word=n - 6, type="broll", motion="drift", broll_query="server room", text="Patch *today*"),
     ])
     doc, notes = director.to_doc(plan, s, words, "t1", tmp_path)  # validate() runs inside
     shots = doc["shots"]

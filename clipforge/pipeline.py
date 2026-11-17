@@ -13,7 +13,7 @@ from rich.console import Console
 
 from . import db, director, finish, ingest, mine, qa, render, shots, voice, write
 from .config import OUT, WORK, settings
-from .schemas import Script, Story
+from .schemas import Script, Story, Word
 from .transcribe import transcribe
 
 console = Console()
@@ -47,7 +47,8 @@ def _sources_txt(story: Story) -> str:
     return "\n".join(lines)
 
 
-def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int, voice_provider: str | None = None) -> dict:
+def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int, voice_provider: str | None = None,
+            reuse_voice: bool = False) -> dict:
     """Script -> finished short. Returns a status dict; never raises."""
     work = WORK / "shorts" / short_id
     work.mkdir(parents=True, exist_ok=True)
@@ -56,8 +57,12 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
     out = OUT / date / short_id
     try:
         db.upsert_short(short_id, short_id, batch_id, "voicing")
-        console.print(f"[cyan]voice[/] {short_id}: {script.title}")
-        words = voice.synthesize(script, short_id, work, voice_provider)
+        if reuse_voice and (work / "words.json").exists() and (work / "vo.mp3").exists():
+            console.print(f"[cyan]voice[/] {short_id}: reusing existing take")
+            words = [Word(**w) for w in json.loads((work / "words.json").read_text(encoding="utf-8"))]
+        else:
+            console.print(f"[cyan]voice[/] {short_id}: {script.title}")
+            words = voice.synthesize(script, short_id, work, voice_provider)
 
         try:
             console.print(f"[cyan]direct[/] {short_id}")
