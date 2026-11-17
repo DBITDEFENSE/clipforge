@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import WORK, settings
 from .llm import structured
-from .schemas import Script, Story
+from .schemas import Review, Script, Story
 
 PROMPT_TMPL = (Path(__file__).parent / "prompts" / "write.md").read_text(encoding="utf-8")
 
@@ -65,6 +65,23 @@ def write(story_id: str, story: Story) -> Script:
             raise RuntimeError(f"script still invalid after a fix pass: {errs}")
     script.hooks[0].spoken = script.beats[0].text  # the spoken hook must be the one we narrate
     return script
+
+
+REVIEW_TMPL = (Path(__file__).parent / "prompts" / "review.md").read_text(encoding="utf-8")
+
+
+def review(story_id: str, story: Story, script: Script) -> tuple[Script, list[str]]:
+    """Separate editor pass: facts vs sources, 2-second hook, pacing, clarity. Keeps the draft if the revision breaks rules."""
+    cfg = settings()
+    system = REVIEW_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"]))
+    user = (f"Story facts:\n{story.model_dump_json(indent=2)}\n\nSource excerpts:\n{_excerpts(story)}\n\n"
+            f"Draft script:\n{script.model_dump_json(indent=2)}")
+    result = structured(system, user, Review, stage="review", ref=story_id, effort=cfg["claude"]["effort_write"])
+    revised = result.revised
+    if problems(revised) and not problems(script):
+        return script, result.issues + ["(revision broke structure/length rules; kept the draft)"]
+    revised.hooks[0].spoken = revised.beats[0].text
+    return revised, result.issues
 
 
 def script_markdown(script: Script, story: Story) -> str:

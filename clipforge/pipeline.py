@@ -11,7 +11,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from . import db, finish, ingest, mine, qa, render, shots, voice, write
+from . import db, director, finish, ingest, mine, qa, render, shots, voice, write
 from .config import OUT, WORK, settings
 from .schemas import Script, Story
 from .transcribe import transcribe
@@ -59,8 +59,18 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
         console.print(f"[cyan]voice[/] {short_id}: {script.title}")
         words = voice.synthesize(script, short_id, work, voice_provider)
 
-        doc = shots.build(script, words, short_id)
-        shots.validate(doc)
+        try:
+            console.print(f"[cyan]direct[/] {short_id}")
+            plan = director.direct(script, words, short_id)
+            (work / "shot_plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+            doc, notes = director.to_doc(plan, script, words, short_id, work)
+            if notes:
+                console.print(f"  director repairs: {'; '.join(notes[:6])}")
+        except Exception as e:
+            console.print(f"[yellow]director failed ({e}); using the built-in planner[/]")
+            doc = shots.build(script, words, short_id)
+            doc["planner"] = f"fallback: {str(e)[:200]}"
+            shots.validate(doc)
         shots_path = work / "shots.json"
         shots_path.write_text(json.dumps(doc, indent=1), encoding="utf-8")
 
@@ -87,7 +97,10 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
             encoding="utf-8")
         (out / "hooks.json").write_text(json.dumps([h.model_dump() for h in script.hooks], indent=2), encoding="utf-8")
         (out / "script.md").write_text(write.script_markdown(script, story), encoding="utf-8")
-        (out / "sources.txt").write_text(_sources_txt(story), encoding="utf-8")
+        credits = sorted({s["props"]["credit"] for s in doc["shots"] if s["type"] == "broll" and s["props"].get("credit")})
+        src_txt = _sources_txt(story) + ("\n\nB-roll (Pexels license):\n" + "\n".join(f"- {c}" for c in credits) if credits else "")
+        src_txt += f"\n\nShot planner: {doc.get('planner', 'built-in')}"
+        (out / "sources.txt").write_text(src_txt, encoding="utf-8")
         (out / "qa.json").write_text(json.dumps(report | {"finish": fin}, indent=2), encoding="utf-8")
 
         status = "done" if report["passed"] else "flagged"
@@ -113,14 +126,23 @@ def run(voice_provider: str | None = None) -> list[dict]:
         db.set_video_status(v["hash"], "mined")
     console.print(f"  {len(stories)} stories found, {len(picks)} picked")
 
+    def write_and_review(sid: str, st: Story) -> Script:
+        draft = write.write(sid, st)
+        final, issues = write.review(sid, st, draft)
+        d = WORK / "shorts" / sid
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "draft.json").write_text(draft.model_dump_json(indent=2), encoding="utf-8")
+        (d / "review.json").write_text(json.dumps({"issues": issues}, indent=2), encoding="utf-8")
+        return final
+
     scripts: dict[str, Script] = {}
     with ThreadPoolExecutor(max_workers=settings()["claude"]["max_parallel"]) as pool:
-        futs = {pool.submit(write.write, sid, st): sid for sid, st, _ in picks}
+        futs = {pool.submit(write_and_review, sid, st): sid for sid, st, _ in picks}
         for f in as_completed(futs):
             sid = futs[f]
             try:
                 scripts[sid] = f.result()
-                console.print(f"[cyan]script[/] {sid}: {scripts[sid].title} ({scripts[sid].word_count()} words)")
+                console.print(f"[cyan]script[/] {sid}: {scripts[sid].title} ({scripts[sid].word_count()} words, reviewed)")
             except Exception as e:
                 db.upsert_short(sid, sid, batch_id, "failed", error=f"writing: {e}")
                 console.print(f"[red]writing failed[/] {sid}: {e}")

@@ -69,6 +69,14 @@ def make(
 
 
 @app.command()
+def setup(port: int = typer.Option(8788)):
+    """Open a local page to paste API keys (validated, saved to .env)."""
+    from .setup_page import serve
+
+    serve(port)
+
+
+@app.command()
 def status():
     """Show videos and shorts in the database."""
     with db.connect() as con:

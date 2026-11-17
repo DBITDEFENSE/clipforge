@@ -1,6 +1,6 @@
 // Mirrors clipforge/shots.schema.json (validated in Python before every render).
 export type Motion = 'pop' | 'punch_in' | 'drift' | 'none';
-export type ShotType = 'kinetic' | 'code' | 'terminal' | 'headline' | 'stat';
+export type ShotType = 'kinetic' | 'code' | 'terminal' | 'headline' | 'stat' | 'diagram' | 'cve' | 'broll';
 
 export interface Brand {
   name: string;

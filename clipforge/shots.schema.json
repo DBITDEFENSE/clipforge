@@ -26,7 +26,7 @@
         "required": ["id", "type", "beat", "start_frame", "end_frame", "motion", "props"],
         "properties": {
           "id": {"type": "string"},
-          "type": {"enum": ["kinetic", "code", "terminal", "headline", "stat"]},
+          "type": {"enum": ["kinetic", "code", "terminal", "headline", "stat", "diagram", "cve", "broll"]},
           "beat": {"enum": ["hook", "what", "how", "why", "punch"]},
           "start_frame": {"type": "integer", "minimum": 0},
           "end_frame": {"type": "integer", "minimum": 1},
@@ -38,7 +38,10 @@
           {"if": {"properties": {"type": {"const": "code"}}}, "then": {"properties": {"props": {"required": ["lines", "anim_start_frame"]}}}},
           {"if": {"properties": {"type": {"const": "terminal"}}}, "then": {"properties": {"props": {"required": ["lines", "anim_start_frame"]}}}},
           {"if": {"properties": {"type": {"const": "headline"}}}, "then": {"properties": {"props": {"required": ["headline", "anim_start_frame"]}}}},
-          {"if": {"properties": {"type": {"const": "stat"}}}, "then": {"properties": {"props": {"required": ["value", "label", "anim_start_frame"]}}}}
+          {"if": {"properties": {"type": {"const": "stat"}}}, "then": {"properties": {"props": {"required": ["value", "label", "anim_start_frame"]}}}},
+          {"if": {"properties": {"type": {"const": "diagram"}}}, "then": {"properties": {"props": {"required": ["nodes", "anim_start_frame"], "properties": {"nodes": {"type": "array", "minItems": 2, "maxItems": 4}}}}}},
+          {"if": {"properties": {"type": {"const": "cve"}}}, "then": {"properties": {"props": {"required": ["cve_id", "anim_start_frame"]}}}},
+          {"if": {"properties": {"type": {"const": "broll"}}}, "then": {"properties": {"props": {"required": ["src"]}}}}
         ]
       }
     },

@@ -1,6 +1,10 @@
 import React from 'react';
 import {AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame} from 'remotion';
 import {Background} from './components/Background';
+import {BRoll} from './components/BRoll';
+import {CVEScoreCard} from './components/CVEScoreCard';
+import {DiagramFlow} from './components/DiagramFlow';
+import {LowerThird} from './components/LowerThird';
 import {Captions} from './components/Captions';
 import {CodeCard} from './components/CodeCard';
 import {HeadlineCard} from './components/HeadlineCard';
@@ -24,8 +28,17 @@ const ShotView: React.FC<{shot: Shot; doc: ShotsDoc}> = ({shot, doc}) => {
     case 'terminal': body = <TerminalCard {...common} />; break;
     case 'headline': body = <HeadlineCard {...common} />; break;
     case 'stat': body = <StatCard {...common} />; break;
+    case 'diagram': body = <DiagramFlow {...common} />; break;
+    case 'cve': body = <CVEScoreCard {...common} />; break;
+    case 'broll': body = <BRoll props={shot.props} duration={shot.end_frame - shot.start_frame} brand={brand} layout={layout} />; break;
   }
-  return <Motion motion={shot.motion} duration={shot.end_frame - shot.start_frame}>{body}</Motion>;
+  const lower = shot.props.lower;
+  return (
+    <>
+      <Motion motion={shot.type === 'broll' ? 'none' : shot.motion} duration={shot.end_frame - shot.start_frame}>{body}</Motion>
+      {lower?.title ? <LowerThird title={lower.title} sub={lower.sub} brand={brand} layout={layout} /> : null}
+    </>
+  );
 };
 
 const Chrome: React.FC<{doc: ShotsDoc}> = ({doc}) => {

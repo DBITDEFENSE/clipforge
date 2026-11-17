@@ -83,6 +83,10 @@ def build(script: Script, words: list[Word], short_id: str, audio: str = "vo.mp3
         a["end_frame"] = b["start_frame"]
     shots[-1]["end_frame"] = duration
 
+    return base_doc(script, ws, short_id, duration, shots, audio)
+
+
+def captions_for(ws: list[W], duration: int, fps: int) -> list[dict]:
     captions = []
     chunks = caption_chunks(ws)
     for ci, idxs in enumerate(chunks):
@@ -96,12 +100,16 @@ def build(script: Script, words: list[Word], short_id: str, audio: str = "vo.mp3
             w_end = ms_to_frame(ws[idxs[j + 1]].start_ms, fps) if j + 1 < len(idxs) else c_end
             cw.append({"text": clean_caption_word(ws[wi].word), "start_frame": w_start, "end_frame": max(w_end, w_start + 1)})
         captions.append({"start_frame": c_start, "end_frame": max(c_end, c_start + 1), "words": cw})
+    return captions
 
+
+def base_doc(script: Script, ws: list[W], short_id: str, duration: int, shots: list[dict], audio: str = "vo.mp3") -> dict:
+    cfg = settings()["video"]
     return {
         "version": 1,
         "short_id": short_id,
         "title": script.title,
-        "fps": fps,
+        "fps": cfg["fps"],
         "width": cfg["width"],
         "height": cfg["height"],
         "duration_frames": duration,
@@ -109,7 +117,7 @@ def build(script: Script, words: list[Word], short_id: str, audio: str = "vo.mp3
         "layout": LAYOUT,
         "brand": brand(),
         "shots": shots,
-        "captions": captions,
+        "captions": captions_for(ws, duration, cfg["fps"]),
     }
 
 

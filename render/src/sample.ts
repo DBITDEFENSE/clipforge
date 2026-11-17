@@ -15,7 +15,7 @@ export const SAMPLE_DOC: ShotsDoc = {
   fps: 30,
   width: 1080,
   height: 1920,
-  duration_frames: 300,
+  duration_frames: 400,
   audio: '',
   layout: {content_top: 250, content_bottom: 1130, caption_top: 1170, caption_bottom: 1440},
   brand: SAMPLE_BRAND,
@@ -25,6 +25,8 @@ export const SAMPLE_DOC: ShotsDoc = {
     {id: 's02', type: 'code', beat: 'how', start_frame: 120, end_frame: 210, motion: 'drift', props: {language: 'http', lines: ['GET /api/session HTTP/1.1', 'Host: vpn.corp.example', 'X-Auth-Verified: true', '', '# server skips the login check', '200 OK'], highlight: 3, anim_start_frame: 120}},
     {id: 's03', type: 'stat', beat: 'why', start_frame: 210, end_frame: 260, motion: 'pop', props: {value: '40,000', label: 'devices exposed', anim_start_frame: 210}},
     {id: 's04', type: 'terminal', beat: 'punch', start_frame: 260, end_frame: 300, motion: 'punch_in', props: {lines: ['$ grep X-Auth-Verified access.log | wc -l', '1337', 'ALERT: header abuse detected'], anim_start_frame: 260}},
+    {id: 's05', type: 'diagram', beat: 'how', start_frame: 300, end_frame: 350, motion: 'drift', props: {nodes: ['Attacker', 'VPN gateway', 'File server'], label: 'forged token', danger: 2, anim_start_frame: 300, lower: {title: 'Ivanti', sub: 'Connect Secure'}}},
+    {id: 's06', type: 'cve', beat: 'what', start_frame: 350, end_frame: 400, motion: 'punch_in', props: {cve_id: 'CVE-2025-0282', cvss: 9.0, severity: 'CRITICAL', product: 'Ivanti Connect Secure', anim_start_frame: 350}},
   ],
   captions: [
     {start_frame: 0, end_frame: 20, words: [{text: 'Your', start_frame: 0, end_frame: 8}, {text: 'VPN', start_frame: 8, end_frame: 20}]},
