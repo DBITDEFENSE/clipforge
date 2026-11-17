@@ -1,0 +1,16 @@
+# ClipForge brand kit: our own look. Passed straight into the Remotion render.
+name: DBIT Defense
+handle: "@dbitdefense"
+colors:
+  bg: "#0A0B0D"          # near-black base
+  surface: "#14161A"
+  text: "#F2F4F7"
+  muted: "#8A93A0"
+  accent: "#00E0FF"      # single accent (cyan)
+  warning: "#FF4D3D"     # single warning color
+fonts:
+  display: Archivo       # captions, headlines, kinetic text (800/900)
+  mono: JetBrains Mono   # code + terminal
+# Later phases: logo, intro sting, end card
+logo: null
+end_card: null

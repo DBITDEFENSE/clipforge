@@ -1,0 +1,27 @@
+{
+  "title": "16-year UEFI boot bug",
+  "hooks": [
+    {"spoken": "Sixteen years. That's how long this bug sat inside your server's firmware.", "on_screen": "*16 years* unpatched"},
+    {"spoken": "Your servers can get owned before the operating system even boots.", "on_screen": "Owned *before boot*"},
+    {"spoken": "The scariest code on your server runs before your security tools wake up.", "on_screen": "EDR is *asleep*"}
+  ],
+  "beats": [
+    {"kind": "hook", "text": "Sixteen years. That's how long this bug sat inside your server's firmware.",
+     "visual": {"type": "kinetic", "screen_text": ["Hidden for *16 years*"]}},
+    {"kind": "what", "text": "A buffer overflow in the network boot code of TianoCore EDK2, the base for most UEFI firmware, lets an attacker on the network run code on a server before the operating system loads. And it's reportedly already being exploited.",
+     "visual": {"type": "headline", "screen_text": ["Code runs *pre-boot*"], "headline": "16-year firmware bug hits most servers", "kicker": "UEFI · EDK2 · PXE"}},
+    {"kind": "how", "text": "Here's the trick. When a server boots over the network, it trusts the packets telling it where to load from. Send one longer than the buffer expects and you overwrite memory the firmware is running. The catch: the attacker needs the server's IP and firmware build.",
+     "visual": {"type": "terminal", "screen_text": ["It *trusts* the network"], "terminal_lines": ["$ pxe-boot --listen eth0", "DHCP offer from 10.0.4.17", "boot option length: 1024 (buffer: 256)", "ALERT: overflow before OS load", "$ edr status", "agent not running (pre-boot)"]}},
+    {"kind": "why", "text": "Nothing on the box can see it, because it runs before the OS. And patching firmware means downtime, so these servers stay exposed for months.",
+     "visual": {"type": "kinetic", "screen_text": ["EDR sees *nothing*", "Patch = *downtime*"]}},
+    {"kind": "punch", "text": "Somewhere, a server is booting someone else's code right now.",
+     "visual": {"type": "kinetic", "screen_text": ["Someone else's *code*"]}}
+  ],
+  "music_mood": "tense",
+  "post": {
+    "caption": "This firmware bug sat in most servers for 16 years. Your EDR can't even see it.",
+    "hashtags": ["#cybersecurity", "#uefi", "#firmware", "#infosec"],
+    "pinned_comment": "Patching UEFI needs a reboot window. How long does your org take to schedule one?",
+    "cover_title": "16 years *hidden*"
+  }
+}

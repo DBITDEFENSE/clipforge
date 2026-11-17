@@ -1,0 +1,49 @@
+[project]
+name = "clipforge"
+version = "0.1.0"
+description = "Local-first pipeline: long-form research videos in, original vertical shorts out."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "typer>=0.15",
+    "rich>=13",
+    "anthropic>=2.10",
+    "pydantic>=2.9",
+    "pyyaml>=6",
+    "jsonschema>=4.23",
+    "python-dotenv>=1",
+    "httpx>=0.28",
+    "yt-dlp[default]>=2026.10",
+    "whisperx>=3.8.6",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+]
+
+[project.scripts]
+clipforge = "clipforge.cli:app"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchaudio = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["clipforge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

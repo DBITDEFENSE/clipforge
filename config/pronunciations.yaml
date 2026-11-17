@@ -1,0 +1,51 @@
+# How the voice should SAY a token. Captions still show the original text.
+# Exact tokens (case-sensitive, punctuation stripped before lookup):
+words:
+  SOC: sock
+  SIEM: sim
+  EDR: E D R
+  XDR: X D R
+  CISA: sissa
+  NVD: N V D
+  CVSS: C V S S
+  RCE: R C E
+  APT: A P T
+  IOC: I O C
+  IOCs: I O Cs
+  TTPs: T T Ps
+  MFA: M F A
+  SSO: S S O
+  OAuth: oh auth
+  SQLi: sequel injection
+  XSS: cross site scripting
+  CSRF: C surf
+  DDoS: dee doss
+  VPN: V P N
+  LLM: L L M
+  LLMs: L L Ms
+  GPU: G P U
+  API: A P I
+  APIs: A P Is
+  npm: N P M
+  PyPI: pie P I
+  GitHub: git hub
+  Fortinet: for tin net
+  Ivanti: eye vanti
+  CrowdStrike: crowd strike
+  SentinelOne: sentinel one
+  Okta: ock ta
+  macOS: mac O S
+  iOS: eye O S
+  Linux: linnux
+  sudo: sue doo
+  root: root
+  regex: rej ex
+  SQL: sequel
+  JSON: jason
+  YAML: yammel
+  nginx: engine x
+
+# Regex rules applied when no exact match. {g1} etc. refer to capture groups.
+patterns:
+  - match: '^CVE-(\d{4})-(\d{4,7})$'
+    say: 'C V E {g1} dash {g2}'

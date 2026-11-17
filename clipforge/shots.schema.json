@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClipForge shots.json",
+  "type": "object",
+  "required": ["version", "short_id", "fps", "width", "height", "duration_frames", "audio", "layout", "brand", "shots", "captions"],
+  "properties": {
+    "version": {"const": 1},
+    "short_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "fps": {"const": 30},
+    "width": {"const": 1080},
+    "height": {"const": 1920},
+    "duration_frames": {"type": "integer", "minimum": 30},
+    "audio": {"type": "string", "minLength": 1},
+    "layout": {
+      "type": "object",
+      "required": ["content_top", "content_bottom", "caption_top", "caption_bottom"],
+      "additionalProperties": {"type": "integer"}
+    },
+    "brand": {"type": "object", "required": ["colors", "fonts"]},
+    "shots": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "beat", "start_frame", "end_frame", "motion", "props"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"enum": ["kinetic", "code", "terminal", "headline", "stat"]},
+          "beat": {"enum": ["hook", "what", "how", "why", "punch"]},
+          "start_frame": {"type": "integer", "minimum": 0},
+          "end_frame": {"type": "integer", "minimum": 1},
+          "motion": {"enum": ["pop", "punch_in", "drift", "none"]},
+          "props": {"type": "object"}
+        },
+        "allOf": [
+          {"if": {"properties": {"type": {"const": "kinetic"}}}, "then": {"properties": {"props": {"required": ["text"]}}}},
+          {"if": {"properties": {"type": {"const": "code"}}}, "then": {"properties": {"props": {"required": ["lines", "anim_start_frame"]}}}},
+          {"if": {"properties": {"type": {"const": "terminal"}}}, "then": {"properties": {"props": {"required": ["lines", "anim_start_frame"]}}}},
+          {"if": {"properties": {"type": {"const": "headline"}}}, "then": {"properties": {"props": {"required": ["headline", "anim_start_frame"]}}}},
+          {"if": {"properties": {"type": {"const": "stat"}}}, "then": {"properties": {"props": {"required": ["value", "label", "anim_start_frame"]}}}}
+        ]
+      }
+    },
+    "captions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["start_frame", "end_frame", "words"],
+        "properties": {
+          "start_frame": {"type": "integer", "minimum": 0},
+          "end_frame": {"type": "integer", "minimum": 1},
+          "words": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": ["text", "start_frame", "end_frame"],
+              "properties": {
+                "text": {"type": "string"},
+                "start_frame": {"type": "integer", "minimum": 0},
+                "end_frame": {"type": "integer", "minimum": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

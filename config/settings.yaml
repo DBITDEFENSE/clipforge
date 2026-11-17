@@ -1,0 +1,59 @@
+# ClipForge settings. Secrets live in .env, never here.
+
+claude:
+  model: claude-opus-5-5          # newest Opus; writing, mining, ranking
+  effort_mine: high
+  effort_write: high
+  # Cyber topics can trip safety classifiers; "default" lets the API re-run a
+  # declined request on a fallback model inside the same call.
+  fallbacks: default
+  max_parallel: 5
+  # USD per 1M tokens, for data/costs.csv
+  price_in: 4.00
+  price_out: 20.00
+
+plan:
+  per_day: 5
+  days: 1
+  timezone: America/New_York
+  niche_weights: { cyber: 1.0, tech: 0.8, ai: 0.8, gaming: 0.6, other: 0.3 }
+
+script:
+  min_words: 110
+  max_words: 160
+
+transcribe:
+  model: large-v3
+  language: en
+  batch_size: 16
+
+voice:
+  provider: elevenlabs            # elevenlabs | say (Windows built-in, for testing only) | take (takes/<short_id>.wav)
+  model_id: eleven_v4             # most expressive EL model as of 2026-11; eleven_multilingual_v2 also works
+  output_format: mp3_44100_192
+  stability: 0.45
+  similarity_boost: 0.8
+  style: 0.15
+  speed: 1.08                     # fast, deadpan delivery
+  tail_ms: 450                    # breathing room after the last word
+
+video:
+  fps: 30
+  width: 1080
+  height: 1920
+  min_shot_ms: 1500
+  max_shot_ms: 2800               # target; snapping to word/phrase boundaries lands shots at <= ~3.1s
+  # Platform UI zones (fraction of height) that captions/cards must avoid.
+  safe_top: 0.10
+  safe_bottom: 0.20
+
+finish:
+  target_lufs: -14.0              # TikTok/Reels/Shorts all normalize near -14 LUFS integrated
+  true_peak: -1.5
+  music_gain_db: -16
+  crf: 15
+
+qa:
+  min_duration_s: 25
+  max_duration_s: 75
+  lufs_tolerance: 1.5
