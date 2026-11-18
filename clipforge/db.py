@@ -38,7 +38,38 @@ CREATE TABLE IF NOT EXISTS shorts (
     created REAL NOT NULL,
     updated REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS posts (
+    short_id TEXT NOT NULL,
+    platform TEXT NOT NULL,                   -- youtube | tiktok
+    status TEXT NOT NULL,                     -- queued | uploading | scheduled | posted | failed | canceled
+    scheduled_at TEXT,                        -- ISO 8601 with offset (America/New_York)
+    options TEXT,                             -- JSON: title/caption/privacy/toggles chosen at approval
+    remote_id TEXT,                           -- YouTube video id / TikTok publish_id
+    url TEXT,
+    error TEXT,
+    updated REAL NOT NULL,
+    PRIMARY KEY (short_id, platform)
+);
+CREATE TABLE IF NOT EXISTS metrics (
+    short_id TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    ts REAL NOT NULL,
+    views INTEGER, likes INTEGER, comments INTEGER, shares INTEGER,
+    PRIMARY KEY (short_id, platform, ts)
+);
+CREATE TABLE IF NOT EXISTS ads (
+    short_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,                     -- candidate | boosted | dismissed
+    note TEXT,
+    spend REAL,
+    updated REAL NOT NULL
+);
 """
+MIGRATIONS = [
+    "ALTER TABLE shorts ADD COLUMN review TEXT NOT NULL DEFAULT 'pending'",   # pending | approved | rejected
+    "ALTER TABLE shorts ADD COLUMN slot TEXT",   # ISO post time (America/New_York)
+    "ALTER TABLE shorts ADD COLUMN notes TEXT",
+]
 
 
 @contextmanager
@@ -47,6 +78,11 @@ def connect():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
+    for m in MIGRATIONS:
+        try:
+            con.execute(m)
+        except sqlite3.OperationalError:  # column already there
+            pass
     try:
         yield con
         con.commit()

@@ -70,12 +70,16 @@ def write(story_id: str, story: Story) -> Script:
 REVIEW_TMPL = (Path(__file__).parent / "prompts" / "review.md").read_text(encoding="utf-8")
 
 
-def review(story_id: str, story: Story, script: Script) -> tuple[Script, list[str]]:
-    """Separate editor pass: facts vs sources, 2-second hook, pacing, clarity. Keeps the draft if the revision breaks rules."""
+def review(story_id: str, story: Story, script: Script, notes: str = "") -> tuple[Script, list[str]]:
+    """Separate editor pass: facts vs sources, 2-second hook, pacing, clarity. Keeps the draft if the revision breaks rules.
+    `notes` = the host's own feedback; applied first, as long as the facts and rules still hold."""
     cfg = settings()
     system = REVIEW_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"]))
     user = (f"Story facts:\n{story.model_dump_json(indent=2)}\n\nSource excerpts:\n{_excerpts(story)}\n\n"
             f"Draft script:\n{script.model_dump_json(indent=2)}")
+    if notes.strip():
+        user += ("\n\nNOTES FROM THE HOST (highest priority; apply them fully, rewriting as much as needed, "
+                 f"but never break the facts or the rules):\n{notes.strip()}")
     result = structured(system, user, Review, stage="review", ref=story_id, effort=cfg["claude"]["effort_write"])
     revised = result.revised
     if problems(revised) and not problems(script):

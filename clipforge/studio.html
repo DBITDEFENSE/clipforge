@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClipForge Studio</title>
+<style>
+:root{--bg:#06070B;--panel:#0F1117;--panel2:#151823;--line:#ffffff14;--line2:#ffffff22;--text:#F4F6FA;--muted:#8B93A7;
+--accent:#00E5FF;--pink:#FF2D87;--lime:#E8FF3A;--bad:#FF3B30;--ok:#3DF2A6;--warn:#FFB020;--r:16px}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,"Segoe UI",sans-serif}
+a{color:var(--accent)}button,input,select,textarea{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:22px;padding:14px 22px;background:#06070BEE;backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.logo{font-weight:900;font-size:20px;letter-spacing:-.02em}.logo b{color:var(--accent)}.logo i{font-style:normal;color:var(--pink)}
+nav{display:flex;gap:4px;flex-wrap:wrap}nav a{color:var(--muted);text-decoration:none;padding:8px 14px;border-radius:10px;font-weight:600}
+nav a.on{background:var(--panel2);color:var(--text)}nav a .n{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:9px;background:var(--pink);color:#fff;font-size:11px;text-align:center}
+.spacer{flex:1}.job-pill{font-size:12px;color:var(--muted)}.job-pill b{color:var(--lime)}
+main{max-width:1280px;margin:0 auto;padding:26px 22px 80px}
+h1{font-size:30px;letter-spacing:-.02em;margin:0 0 4px}h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:30px 0 12px}
+.sub{color:var(--muted);margin:0 0 22px}
+.btn{border:0;border-radius:12px;padding:10px 16px;font-weight:800;cursor:pointer;background:var(--accent);color:#001218;white-space:nowrap}
+.btn:disabled{opacity:.35;cursor:not-allowed}.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line2)}
+.btn.pink{background:var(--pink);color:#fff}.btn.bad{background:transparent;color:var(--bad);border:1px solid #FF3B3055}.btn.sm{padding:6px 11px;border-radius:9px;font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+textarea,input[type=text],input[type=number],input[type=datetime-local],select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;outline:none}
+textarea:focus,input:focus,select:focus{border-color:var(--accent)}
+label.f{display:block;font-weight:700;margin:14px 0 6px}label.f small{color:var(--muted);font-weight:400}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.drop{border:2px dashed var(--line2);border-radius:var(--r);padding:26px;text-align:center;color:var(--muted);transition:.15s}
+.drop.over{border-color:var(--accent);color:var(--text);background:#00E5FF0D}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.card video{width:100%;aspect-ratio:9/16;background:#000;display:block}
+.card .b{padding:14px;display:flex;flex-direction:column;gap:9px;flex:1}.card .t{font-weight:800;font-size:15px;line-height:1.3}
+.pill{display:inline-flex;align-items:center;gap:5px;font:700 11px ui-monospace,Consolas,monospace;padding:3px 8px;border-radius:7px;background:#ffffff0d;color:var(--muted)}
+.pill.ok{background:#3DF2A61A;color:var(--ok)}.pill.bad{background:#FF3B301F;color:var(--bad)}.pill.warn{background:#FFB0201F;color:var(--warn)}.pill.cy{background:#00E5FF1A;color:var(--accent)}.pill.pk{background:#FF2D871F;color:var(--pink)}
+.acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:auto}
+details summary{cursor:pointer;color:var(--accent);font-size:13px}details .txt{white-space:pre-wrap;color:#c9cfdb;font-size:13px;margin-top:6px}
+.chips{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}.chip{padding:6px 12px;border-radius:20px;border:1px solid var(--line2);cursor:pointer;color:var(--muted);font-weight:600;background:none}.chip.on{background:var(--text);color:#000;border-color:var(--text)}
+.log{background:#000;border:1px solid var(--line);border-radius:12px;padding:12px;font:12px/1.45 ui-monospace,Consolas,monospace;color:#b9c2d3;white-space:pre-wrap;max-height:340px;overflow:auto}
+.jobs{display:flex;flex-direction:column;gap:8px}.job{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);cursor:pointer}
+.dot{width:9px;height:9px;border-radius:5px;background:var(--muted);flex:none}.dot.running{background:var(--lime);box-shadow:0 0 10px var(--lime);animation:p 1s infinite}.dot.done{background:var(--ok)}.dot.failed{background:var(--bad)}
+@keyframes p{50%{opacity:.35}}
+.day{margin-bottom:18px}.day h3{margin:0 0 8px;font-size:15px}.slot{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:6px}
+.slot.empty{opacity:.45}.slot .tm{font:700 14px ui-monospace,Consolas,monospace;color:var(--accent)}.slot.past .tm{color:var(--muted)}
+.modal{position:fixed;inset:0;background:#000B;z-index:20;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 14px}
+.modal.on{display:flex}.sheet{background:var(--panel);border:1px solid var(--line2);border-radius:20px;width:min(980px,100%);display:grid;grid-template-columns:300px 1fr;overflow:hidden}
+.sheet video{width:100%;height:100%;object-fit:cover;background:#000;min-height:420px}.sheet .body{padding:22px;max-height:calc(100vh - 60px);overflow:auto}
+.plat{border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:14px;background:var(--panel2)}.plat h4{margin:0;display:flex;gap:10px;align-items:center;font-size:15px}
+.chk{display:flex;gap:8px;align-items:center;margin:6px 0;color:#d5dae4}.chk input{width:17px;height:17px;accent-color:var(--accent)}.chk.dis{opacity:.4}
+.note{font-size:12.5px;color:var(--muted);margin-top:8px}.note.w{color:var(--warn)}
+.consent{font-size:13px;color:#d5dae4;margin-top:12px;padding:10px 12px;border-radius:10px;background:#ffffff08}
+.cards2{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
+.conn h3{margin:0 0 4px;font-size:18px}.steps{color:#c9cfdb;padding-left:18px;margin:8px 0}.steps li{margin:4px 0}
+code{background:#ffffff12;padding:2px 6px;border-radius:6px;font-size:12.5px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--lime);color:#000;font-weight:800;padding:11px 18px;border-radius:12px;z-index:30;display:none;max-width:90vw}
+.toast.err{background:var(--bad);color:#fff}
+.empty-state{padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--line2);border-radius:var(--r)}
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}
+@media (max-width:860px){.hero{grid-template-columns:1fr}.sheet{grid-template-columns:1fr}.sheet video{min-height:0;max-height:50vh}.top{flex-wrap:wrap;gap:10px}.cards2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">Clip<b>Forge</b> <i>Studio</i></div>
+  <nav id="nav">
+    <a href="#create" data-t="create">Create</a>
+    <a href="#review" data-t="review">Review<span class="n" id="n-review" hidden></span></a>
+    <a href="#schedule" data-t="schedule">Schedule</a>
+    <a href="#performance" data-t="performance">Performance</a>
+    <a href="#connect" data-t="connect">Connect</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="job-pill" id="jobpill"></div>
+</div>
+<main id="main"></main>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let S = {shorts: [], jobs: [], slots: []}, C = null, tab = 'create', filter = 'pending', openJob = null, lastRender = '';
+const toast = (m, err) => { const t = $('#toast'); t.textContent = m; t.className = 'toast' + (err ? ' err' : ''); t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', err ? 6000 : 3000); };
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const fmtSlot = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString([], {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: S.tz || 'America/New_York'}) + ' ET'; };
+const statusPill = (p, st) => { if (!st) return ''; const cls = {posted: 'ok', scheduled: 'cy', queued: 'warn', uploading: 'warn', failed: 'bad', canceled: ''}[st.status] ?? '';
+  const icon = p === 'youtube' ? '▶' : '♪'; const link = st.url ? ` <a href="${esc(st.url)}" target="_blank">open</a>` : '';
+  return `<span class="pill ${cls}" title="${esc(st.error || '')}">${icon} ${esc(st.status)}${link}</span>`; };
+
+async function refresh() {
+  try { S = await api('/api/state'); } catch (e) { return; }
+  const pending = S.shorts.filter(s => s.review === 'pending' && s.video).length;
+  const n = $('#n-review'); n.hidden = !pending; n.textContent = pending;
+  const running = S.jobs.find(j => j.status === 'running'); const queued = S.jobs.filter(j => j.status === 'queued').length;
+  $('#jobpill').innerHTML = running ? `<b>●</b> ${esc(running.label)}${queued ? ` (+${queued} queued)` : ''}` : '';
+  render();
+}
+
+function route() {
+  const h = location.hash.slice(1) || 'create'; tab = h.split('?')[0];
+  const qs = new URLSearchParams(h.split('?')[1] || '');
+  if (qs.get('ok')) { toast(`${qs.get('ok') === 'youtube' ? 'YouTube' : 'TikTok'} connected`); C = null; history.replaceState(null, '', '#connect'); }
+  if (qs.get('err')) { toast('Connect failed: ' + qs.get('err'), true); history.replaceState(null, '', '#connect'); }
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.t === tab));
+  lastRender = ''; render();
+  if (tab === 'connect') loadConn();
+  if (tab === 'performance') loadAds();
+}
+window.addEventListener('hashchange', route);
+
+function render() {
+  const fn = {create: vCreate, review: vReview, schedule: vSchedule, performance: vPerformance, connect: vConnect}[tab] || vCreate;
+  const html = fn();
+  if (html === lastRender) return;
+  // don't clobber a field the user is typing in or a playing video
+  const active = document.activeElement;
+  if (active && ['TEXTAREA', 'INPUT'].includes(active.tagName) && $('#main').contains(active)) return;
+  if ([...document.querySelectorAll('#main video')].some(v => !v.paused)) return;
+  const keep = {}; document.querySelectorAll('#main textarea[id], #main input[type=text][id]').forEach(el => { if (el.value) keep[el.id] = el.value; });
+  lastRender = html; $('#main').innerHTML = html;
+  for (const [id, v] of Object.entries(keep)) { const el = document.getElementById(id); if (el && !el.value) el.value = v; }
+  after();
+}
+let afterHooks = [];
+function after() { afterHooks.forEach(f => f()); afterHooks = []; }
+
+/* ---------------- Create ---------------- */
+function vCreate() {
+  const job = S.jobs.find(j => j.id === openJob) || S.jobs.find(j => j.status === 'running') || S.jobs[0];
+  afterHooks.push(() => { wireDrop(); if (job) loadLog(job.id); });
+  return `<h1>Make shorts</h1><p class="sub">Paste links or drop videos. They're research input: ClipForge writes new scripts, voices them, and animates original visuals.</p>
+  <div class="hero"><div class="panel">
+    <label class="f" style="margin-top:0">Links <small>YouTube, X, TikTok, Instagram... one per line</small></label>
+    <textarea id="urls" rows="5" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn" onclick="make()">Make shorts</button>
+      <span class="note">Best ${3} stories per video, posted 5/day. ${S.inbox?.length ? `${S.inbox.length} file(s) waiting in inbox.` : ''}</span></div>
+    <div class="drop" id="drop" style="margin-top:16px">Drop video files here<br><small>or <a href="#" onclick="$('#file').click();return false">choose files</a></small>
+      <input type="file" id="file" accept="video/*" multiple hidden></div>
+    <div id="upl" class="note"></div>
+  </div><div class="panel">
+    <h2 style="margin-top:0">Jobs</h2>
+    <div class="jobs">${S.jobs.length ? S.jobs.map(j => `<div class="job" onclick="openJob='${j.id}';lastRender='';render()"><span class="dot ${j.status}"></span><div style="flex:1">${esc(j.label)}<div class="note" style="margin:0">${j.status}${j.ended && j.started ? ` · ${Math.round((j.ended - j.started) / 60)} min` : ''}</div></div></div>`).join('') : '<div class="note">Nothing running.</div>'}</div>
+  </div></div>
+  ${job ? `<h2>${esc(job.label)} <span class="pill">${job.status}</span></h2><div class="log" id="log">loading...</div>` : ''}`;
+}
+async function loadLog(id) { try { const j = await api('/api/job/' + id); const el = $('#log'); if (el) { const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 30; el.textContent = j.log || '(no output yet)'; if (atEnd) el.scrollTop = el.scrollHeight; } } catch (e) {} }
+async function make() {
+  const urls = $('#urls').value; if (!urls.trim() && !S.inbox?.length) return toast('Paste a link or drop a video first', true);
+  try { const j = await api('/api/make', {urls}); openJob = j.id; $('#urls').value = ''; $('#urls').blur(); toast('Started: ' + j.label); refresh(); } catch (e) { toast(e.message, true); }
+}
+function wireDrop() {
+  const d = $('#drop'); if (!d) return;
+  const send = async files => { for (const f of files) { $('#upl').textContent = `Uploading ${f.name}...`;
+      const r = await fetch('/api/upload', {method: 'POST', headers: {'X-Filename': encodeURIComponent(f.name)}, body: f});
+      $('#upl').textContent = r.ok ? `${f.name} is in the inbox. Hit "Make shorts".` : `Upload failed: ${(await r.json()).error}`; } refresh(); };
+  d.ondragover = e => { e.preventDefault(); d.classList.add('over'); }; d.ondragleave = () => d.classList.remove('over');
+  d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); send(e.dataTransfer.files); };
+  $('#file').onchange = e => send(e.target.files);
+}
+
+/* ---------------- Review ---------------- */
+function vReview() {
+  const list = S.shorts.filter(s => filter === 'all' || s.review === filter || (filter === 'failed' && s.status === 'failed'));
+  const count = f => S.shorts.filter(s => s.review === f).length;
+  return `<h1>Review</h1><p class="sub">Watch, then approve into a posting slot, regenerate with notes, or reject.</p>
+  <div class="chips">${['pending', 'approved', 'rejected', 'all'].map(f => `<button class="chip ${filter === f ? 'on' : ''}" onclick="filter='${f}';lastRender='';render()">${f} ${f !== 'all' ? count(f) : S.shorts.length}</button>`).join('')}</div>
+  ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : `<div class="empty-state">Nothing here. ${filter === 'pending' ? 'Make some shorts on the Create tab.' : ''}</div>`}`;
+}
+function card(s) {
+  const qa = s.status === 'failed' ? `<span class="pill bad">FAILED</span>` : s.qa_pass ? '<span class="pill ok">QA ✓</span>' : `<span class="pill warn">FLAGGED ${esc(s.qa_fail.join(', '))}</span>`;
+  const rv = {approved: `<span class="pill cy">${esc(fmtSlot(s.slot))}</span>`, rejected: '<span class="pill bad">rejected</span>'}[s.review] || '';
+  const posts = Object.entries(s.posts).filter(([, p]) => p.status !== 'canceled').map(([k, p]) => statusPill(k, p)).join(' ');
+  const acts = s.review === 'approved'
+    ? `<button class="btn sm ghost" onclick="openApprove('${s.id}')">Edit</button><button class="btn sm ghost" onclick="unapprove('${s.id}')">Unschedule</button>`
+    : `<button class="btn sm" ${s.video ? '' : 'disabled'} onclick="openApprove('${s.id}')">Approve</button><button class="btn sm pink" onclick="openRevise('${s.id}')">Regenerate</button>${s.review !== 'rejected' ? `<button class="btn sm bad" onclick="reject('${s.id}')">Reject</button>` : ''}`;
+  return `<div class="card">${s.video ? `<video controls preload="metadata" poster="${s.cover || ''}" src="${s.video}"></video>` : `<div class="empty-state" style="border:0;aspect-ratio:9/16;display:grid;place-items:center">${esc(s.error || s.status)}</div>`}
+  <div class="b"><div class="t">${esc(s.title)}</div><div class="row" style="gap:6px">${qa}${rv}<span class="pill">${esc(s.duration)}</span>${posts}</div>
+  ${s.notes ? `<div class="note">Notes: ${esc(s.notes)}</div>` : ''}
+  <details><summary>Caption & hooks</summary><div class="txt">${esc(s.post.caption || '')}\n${esc((s.post.hashtags || []).join(' '))}\n\nHooks:\n${s.hooks.map((h, i) => `${i + 1}. ${esc(h.spoken)}`).join('\n')}</div></details>
+  <details><summary>Script</summary><div class="txt">${s.beats.map(b => `${b.kind.toUpperCase()}: ${esc(b.text)}`).join('\n\n')}</div></details>
+  <div class="acts">${acts}</div></div></div>`;
+}
+async function reject(id) { const notes = prompt('Why? (optional, helps later)') ?? null; if (notes === null) return; try { await api('/api/reject', {id, notes}); toast('Rejected'); refresh(); } catch (e) { toast(e.message, true); } }
+async function unapprove(id) { try { const j = await api('/api/unapprove', {id}); toast(j.notes?.length ? j.notes.join(' · ') : 'Back to pending', !!j.notes?.length); refresh(); } catch (e) { toast(e.message, true); } }
+
+function openRevise(id) {
+  const s = S.shorts.find(x => x.id === id);
+  $('#sheet').innerHTML = `${s.video ? `<video src="${s.video}" controls></video>` : '<div></div>'}<div class="body"><h1 style="font-size:22px">Regenerate</h1><p class="sub">${esc(s.title)}</p>
+  <label class="f">What should change?</label><textarea id="rnotes" rows="5" placeholder="e.g. Hook is slow, open on the $6.3B. More jokes in the middle. Fewer code cards, more reactions.">${esc(s.notes || '')}</textarea>
+  <label class="f">Redo</label>
+  <label class="chk"><input type="radio" name="scope" value="visuals" checked> Visuals only <small class="note" style="margin:0">(new shot plan + render, keeps script and voice, no voice credits)</small></label>
+  <label class="chk"><input type="radio" name="scope" value="script"> Script + voice + visuals <small class="note" style="margin:0">(rewrites with your notes, re-voices: uses ElevenLabs credits)</small></label>
+  <div class="row" style="margin-top:18px"><button class="btn pink" onclick="doRevise('${id}')">Regenerate</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div></div>`;
+  $('#modal').classList.add('on');
+}
+async function doRevise(id) {
+  const notes = $('#rnotes').value.trim(); const scope = document.querySelector('input[name=scope]:checked').value;
+  if (!notes) return toast('Tell it what to change', true);
+  try { const j = await api('/api/revise', {id, notes, scope}); closeModal(); openJob = j.id; toast('Regenerating; follow it on Create'); refresh(); } catch (e) { toast(e.message, true); }
+}
+function closeModal() { $('#modal').classList.remove('on'); $('#sheet').innerHTML = ''; lastRender = ''; }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+/* ---------------- Approve & schedule ---------------- */
+let A = {};
+async function openApprove(id) {
+  const s = S.shorts.find(x => x.id === id);
+  if (!C) C = await api('/api/connections').catch(() => ({youtube: {}, tiktok: {}}));
+  const d = await api('/api/defaults?id=' + encodeURIComponent(id));
+  const free = S.slots.filter(x => !x.past && (!x.short_id || x.short_id === id));
+  const cur = s.slot || S.next_slot;
+  A = {id, ttInfo: null};
+  const want = p => (s.posts[p] && s.posts[p].status !== 'canceled') || (!Object.keys(s.posts).length && S.platforms.includes(p) && C[p]?.connected);
+  $('#sheet').innerHTML = `<video src="${s.video}" controls></video><div class="body">
+  <h1 style="font-size:22px">Approve & schedule</h1><p class="sub">${esc(s.title)}</p>
+  <label class="f" style="margin-top:0">Post time <small>(${esc(S.tz)})</small></label>
+  <select id="slot">${free.map(x => `<option value="${x.slot}" ${x.slot === cur ? 'selected' : ''}>${esc(fmtSlot(x.slot))}</option>`).join('')}${free.some(x => x.slot === cur) ? '' : `<option value="${cur}" selected>${esc(fmtSlot(cur))}</option>`}</select>
+
+  <div class="plat"><h4><label class="chk" style="margin:0"><input type="checkbox" id="yt-on" ${want('youtube') ? 'checked' : ''} ${C.youtube?.connected ? '' : 'disabled'}> ▶ YouTube Shorts</label>
+    ${C.youtube?.connected ? `<span class="pill ok">${esc(C.channel?.title || 'connected')}</span>` : '<a href="#connect" onclick="closeModal()">connect</a>'}</h4>
+    <div id="yt-f"><label class="f">Title</label><input type="text" id="yt-title" maxlength="100" value="${esc(d.youtube.title)}">
+    <label class="f">Description</label><textarea id="yt-desc" rows="4">${esc(d.youtube.description)}</textarea>
+    <label class="chk"><input type="checkbox" id="yt-ai" ${S.ai_disclosure ? 'checked' : ''}> Altered or synthetic content (AI voice / generated visuals)</label>
+    <div class="note">Uploads now as private and YouTube publishes it at the post time, even if the studio is closed.</div></div></div>
+
+  <div class="plat"><h4><label class="chk" style="margin:0"><input type="checkbox" id="tt-on" ${want('tiktok') ? 'checked' : ''} ${C.tiktok?.connected ? '' : 'disabled'} onchange="ttToggle()"> ♪ TikTok</label>
+    ${C.tiktok?.connected ? '<span class="pill" id="tt-who">loading account...</span>' : '<a href="#connect" onclick="closeModal()">connect</a>'}</h4>
+    <div id="tt-f" style="display:none"><label class="f">Caption</label><textarea id="tt-cap" rows="3" maxlength="2200">${esc(d.tiktok.caption)}</textarea>
+    <label class="f">Who can view this video</label><select id="tt-priv" onchange="ttValidate()"><option value="" selected disabled>Select privacy</option></select>
+    <label class="f">Allow users to</label>
+    <div class="row" style="gap:18px"><label class="chk" id="c-com"><input type="checkbox" id="tt-com"> Comment</label><label class="chk" id="c-duet"><input type="checkbox" id="tt-duet"> Duet</label><label class="chk" id="c-stitch"><input type="checkbox" id="tt-stitch"> Stitch</label></div>
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="tt-cc" onchange="ttValidate()"> <b>Disclose commercial content</b></label>
+    <div id="tt-ccf" style="display:none;padding-left:26px">
+      <label class="chk"><input type="checkbox" id="tt-own" onchange="ttValidate()"> Your brand <span class="note" style="margin:0">— labeled "Promotional content"</span></label>
+      <label class="chk"><input type="checkbox" id="tt-brand" onchange="ttValidate()"> Branded content <span class="note" style="margin:0">— labeled "Paid partnership"</span></label>
+      <div class="note w" id="tt-ccmsg"></div></div>
+    <label class="chk"><input type="checkbox" id="tt-ai" ${S.ai_disclosure ? 'checked' : ''}> Label as AI-generated</label>
+    <div class="consent" id="tt-consent"></div>
+    <div class="note">Posts at the post time while the studio is running (TikTok has no scheduling API). After posting, processing can take a few minutes before it shows on your profile. Until TikTok audits the app, posts are private-only.</div></div></div>
+
+  <div class="row" style="margin-top:18px"><button class="btn" id="go" onclick="doApprove()">Schedule</button><button class="btn ghost" onclick="closeModal()">Cancel</button>
+</div>
+  ${!C.youtube?.connected && !C.tiktok?.connected ? '<div class="note w">No platform connected yet: this just reserves the slot (and queue.csv). Connect accounts on the Connect tab to auto-post.</div>' : ''}
+  </div>`;
+  $('#modal').classList.add('on');
+  ttToggle(); ttValidate();
+}
+async function ttToggle() {
+  const on = $('#tt-on')?.checked; $('#tt-f').style.display = on ? 'block' : 'none';
+  if (on && !A.ttInfo) {
+    try {
+      const i = await api('/api/tiktok/creator'); A.ttInfo = i;
+      $('#tt-who').textContent = 'Posting to @' + (i.creator_username || i.creator_nickname || '?') + (i.creator_nickname ? ` (${i.creator_nickname})` : '');
+      $('#tt-who').className = 'pill ok';
+      const names = {PUBLIC_TO_EVERYONE: 'Everyone', MUTUAL_FOLLOW_FRIENDS: 'Friends', FOLLOWER_OF_CREATOR: 'Followers', SELF_ONLY: 'Only me'};
+      $('#tt-priv').innerHTML = '<option value="" selected disabled>Select privacy</option>' + (i.privacy_level_options || []).map(o => `<option value="${o}">${names[o] || o}</option>`).join('');
+      [['com', i.comment_disabled], ['duet', i.duet_disabled], ['stitch', i.stitch_disabled]].forEach(([k, dis]) => { if (dis) { $('#tt-' + k).disabled = true; $('#c-' + k).classList.add('dis'); } });
+      const s = S.shorts.find(x => x.id === A.id); const secs = parseFloat(s.duration);
+      if (i.max_video_post_duration_sec && secs > i.max_video_post_duration_sec) toast(`Too long for this TikTok account (max ${i.max_video_post_duration_sec}s)`, true);
+    } catch (e) { $('#tt-who').textContent = e.message; $('#tt-who').className = 'pill bad'; }
+  }
+  ttValidate();
+}
+function ttValidate() {
+  const go = $('#go'); if (!go) return; let ok = true;
+  const tt = $('#tt-on')?.checked;
+  if (tt) {
+    const cc = $('#tt-cc').checked, own = $('#tt-own').checked, brand = $('#tt-brand').checked, priv = $('#tt-priv').value;
+    $('#tt-ccf').style.display = cc ? 'block' : 'none';
+    const only = [...$('#tt-priv').options].find(o => o.value === 'SELF_ONLY');
+    if (only) { only.disabled = brand; only.title = brand ? 'Branded content visibility cannot be set to private.' : ''; if (brand && priv === 'SELF_ONLY') $('#tt-priv').value = ''; }
+    $('#tt-ccmsg').textContent = cc && !own && !brand ? 'You need to indicate if your content promotes yourself, a third party, or both.' : (brand ? 'Your video will be labeled as "Paid partnership".' : own ? 'Your video will be labeled as "Promotional content".' : '');
+    const music = '<a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Music Usage Confirmation</a>';
+    $('#tt-consent').innerHTML = brand ? `By posting, you agree to TikTok's <a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank">Branded Content Policy</a> and ${music}.` : `By posting, you agree to TikTok's ${music}.`;
+    if (!$('#tt-priv').value || (cc && !own && !brand) || !A.ttInfo) ok = false;
+  }
+  go.disabled = !ok;
+}
+async function doApprove() {
+  const targets = {};
+  if ($('#yt-on').checked) targets.youtube = {title: $('#yt-title').value, description: $('#yt-desc').value, synthetic_media: $('#yt-ai').checked};
+  if ($('#tt-on').checked) targets.tiktok = {caption: $('#tt-cap').value, privacy: $('#tt-priv').value, allow_comment: $('#tt-com').checked,
+    allow_duet: $('#tt-duet').checked, allow_stitch: $('#tt-stitch').checked, brand_organic: $('#tt-cc').checked && $('#tt-own').checked,
+    branded_content: $('#tt-cc').checked && $('#tt-brand').checked, is_aigc: $('#tt-ai').checked, consent: true};
+  try { await api('/api/approve', {id: A.id, slot: $('#slot').value, targets}); closeModal(); toast('Scheduled for ' + fmtSlot($('#slot')?.value || '')); refresh(); }
+  catch (e) { toast(e.message, true); }
+}
+
+/* ---------------- Schedule ---------------- */
+function vSchedule() {
+  const byId = Object.fromEntries(S.shorts.map(s => [s.id, s])); const days = {};
+  S.slots.forEach(x => { const k = new Date(x.slot).toLocaleDateString([], {weekday: 'long', month: 'short', day: 'numeric', timeZone: S.tz}); (days[k] ||= []).push(x); });
+  const filled = S.slots.filter(x => x.short_id).length;
+  return `<h1>Schedule</h1><p class="sub">${filled} of ${S.slots.length} slots filled this week · times in ${esc(S.tz)} · mirrored to <code>out/queue.csv</code>. TikTok posts go out while the studio is running; YouTube publishes on its own.</p>
+  ${Object.entries(days).map(([day, xs]) => `<div class="day"><h3>${esc(day)}</h3>${xs.map(x => { const s = byId[x.short_id];
+    const t = new Date(x.slot).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', timeZone: S.tz});
+    if (!s) return `<div class="slot empty ${x.past ? 'past' : ''}"><span class="tm">${t}</span><span class="note" style="margin:0">${x.past ? '' : 'open'}</span><span></span></div>`;
+    const posts = Object.entries(s.posts).filter(([, p]) => p.status !== 'canceled');
+    return `<div class="slot ${x.past ? 'past' : ''}"><span class="tm">${t}</span><div><b>${esc(s.title)}</b><div class="row" style="gap:6px;margin-top:4px">${posts.map(([k, p]) => statusPill(k, p)).join(' ') || '<span class="pill">no platforms</span>'}</div>
+      ${posts.filter(([, p]) => p.error).map(([k, p]) => `<div class="note w">${k}: ${esc(p.error.split('\n')[0])}</div>`).join('')}</div>
+      <div class="row">${posts.filter(([, p]) => ['queued', 'failed'].includes(p.status)).map(([k]) => `<button class="btn sm ghost" onclick="postNow('${s.id}','${k}')">Post ${k} now</button>`).join('')}
+      <button class="btn sm ghost" onclick="unapprove('${s.id}')">Unschedule</button></div></div>`; }).join('')}</div>`).join('')}
+  ${S.log?.length ? `<h2>Publisher log</h2><div class="log">${esc(S.log.join('\n'))}</div>` : ''}`;
+}
+async function postNow(id, platform) {
+  if (!confirm(`Publish to ${platform} right now?`)) return;
+  try { await api('/api/post-now', {id, platform}); toast('Sent to ' + platform); refresh(); } catch (e) { toast(e.message, true); }
+}
+
+/* ---------------- Performance & ads ---------------- */
+let ADS = [];
+async function loadAds() { try { ADS = await api('/api/ads'); lastRender = ''; render(); } catch (e) {} }
+function vPerformance() {
+  const posted = S.shorts.filter(s => Object.values(s.posts).some(p => ['posted', 'scheduled'].includes(p.status)));
+  const m = (s, p, k) => s.metrics[p]?.[k] ?? '–';
+  return `<div class="row"><div style="flex:1"><h1>Performance</h1><p class="sub">Stats refresh every 6 hours while the studio runs. Winners show up below as ad candidates.</p></div><button class="btn ghost" onclick="refreshStats()">Refresh stats</button></div>
+  ${posted.length ? `<div class="panel" style="padding:6px 14px"><table><tr><th>Short</th><th>TikTok views</th><th>likes</th><th>YouTube views</th><th>likes</th></tr>
+    ${posted.map(s => `<tr><td>${esc(s.title)}</td><td>${m(s, 'tiktok', 'views')}</td><td>${m(s, 'tiktok', 'likes')}</td><td>${m(s, 'youtube', 'views')}</td><td>${m(s, 'youtube', 'likes')}</td></tr>`).join('')}</table></div>`
+    : '<div class="empty-state">Nothing posted yet.</div>'}
+  <h2>Ad candidates</h2><p class="sub" style="margin-top:-6px">Picked from real numbers: at least a day old, beating your median views, strong engagement. ClipForge never spends money. You launch the boost and set the budget.</p>
+  ${ADS.length ? `<div class="cards2">${ADS.map(a => `<div class="panel"><div class="row"><b style="flex:1">${esc(a.title)}</b><span class="pill ${a.status === 'boosted' ? 'pk' : 'cy'}">${esc(a.status)}</span></div>
+    <div class="note">${a.platform} · ${a.views.toLocaleString()} views · ${(a.engagement * 100).toFixed(1)}% engagement · ${a.age_hours}h old</div>
+    <div style="margin:10px 0">${a.why.map(w => `<span class="pill ok">${esc(w)}</span> `).join('')}</div>
+    <div class="note">Suggested test: ${esc(a.suggested)}</div>
+    <div class="row" style="margin-top:12px">${a.url ? `<a class="btn sm ghost" href="${esc(a.url)}" target="_blank">View post</a>` : ''}
+      <a class="btn sm" href="https://ads.tiktok.com/" target="_blank">Open TikTok Ads Manager</a>
+      ${a.status === 'boosted' ? `<span class="note">spend: $${a.spend ?? 0}</span>` : `<button class="btn sm pink" onclick="markAd('${a.short_id}','boosted')">Mark boosted</button><button class="btn sm ghost" onclick="markAd('${a.short_id}','dismissed')">Dismiss</button>`}</div></div>`).join('')}</div>`
+    : '<div class="empty-state">No candidates yet. They appear once posts have a day of real numbers.</div>'}
+  <details style="margin-top:18px"><summary>How to boost a winner on TikTok (Spark Ads)</summary><div class="txt">1. In the TikTok app: open the post → ⋯ → Ad settings → turn on "Ad authorization" → generate a code (7–365 days).
+2. TikTok Ads Manager → Create campaign → Objective (Video views or Traffic) → Ad group: budget + schedule, audience (start broad, US, 18+).
+3. Ad: "Use TikTok account to deliver Spark Ads" → paste the authorization code → publish.
+Start with the suggested test budget, then raise spend only on ads that keep a low cost per view.</div></details>`;
+}
+async function refreshStats() { try { const j = await api('/api/stats', {}); toast(`Pulled ${j.rows} stat rows`); await refresh(); loadAds(); } catch (e) { toast(e.message, true); } }
+async function markAd(id, status) {
+  let spend = null; if (status === 'boosted') { const v = prompt('Planned spend in USD (for tracking):', '60'); if (v === null) return; spend = parseFloat(v) || 0; }
+  try { await api('/api/ads/mark', {id, status, spend}); loadAds(); } catch (e) { toast(e.message, true); }
+}
+
+/* ---------------- Connect ---------------- */
+async function loadConn() { try { C = await api('/api/connections'); lastRender = ''; render(); } catch (e) { toast(e.message, true); } }
+function vConnect() {
+  if (!C) return '<h1>Connect</h1><p class="sub">Loading...</p>';
+  const copy = t => `<button class="btn sm ghost" onclick="navigator.clipboard.writeText('${t}');toast('Copied')">copy</button>`;
+  const yt = C.youtube, tt = C.tiktok;
+  return `<h1>Connect</h1><p class="sub">Accounts and keys. Everything is stored on this PC (<code>.env</code>, <code>data/tokens/</code>).</p>
+  <div class="cards2">
+  <div class="panel conn"><div class="row"><h3 style="flex:1">▶ YouTube</h3>${yt.connected ? `<span class="pill ok">connected${C.channel?.title ? ' · ' + esc(C.channel.title) : ''}</span>` : '<span class="pill">not connected</span>'}</div>
+    ${yt.connected ? `<div class="row" style="margin-top:12px"><button class="btn sm ghost" onclick="disc('youtube')">Disconnect</button></div>`
+    : yt.configured ? `<p class="note">Client keys saved. Sign in with the Google account that owns your channel.</p><a class="btn" href="/oauth/youtube/start">Connect YouTube</a>`
+    : `<ol class="steps"><li><a href="https://console.cloud.google.com/projectcreate" target="_blank">Create a Google Cloud project</a></li>
+      <li>Enable <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">YouTube Data API v3</a></li>
+      <li>OAuth consent screen: External, add your Google account as a test user</li>
+      <li>Credentials → Create OAuth client ID → <b>Desktop app</b>, then paste the ID and secret here</li></ol>
+      <label class="f">Client ID</label><input type="text" id="k-gid"><label class="f">Client secret</label><input type="text" id="k-gsec">
+      <div class="row" style="margin-top:12px"><button class="btn" onclick="saveKeys('g')">Save</button></div>`}
+  </div>
+  <div class="panel conn"><div class="row"><h3 style="flex:1">♪ TikTok</h3>${tt.connected ? '<span class="pill ok">connected</span>' : '<span class="pill">not connected</span>'}</div>
+    ${tt.connected ? `<div class="row" style="margin-top:12px"><button class="btn sm ghost" onclick="disc('tiktok')">Disconnect</button></div>`
+    : tt.configured ? `<p class="note">App keys saved. Make sure this redirect URI is registered in your TikTok app: <code>${esc(tt.redirect)}</code> ${copy(tt.redirect)}</p><a class="btn" href="/oauth/tiktok/start">Connect TikTok</a>`
+    : `<ol class="steps"><li><a href="https://developers.tiktok.com/apps" target="_blank">developers.tiktok.com → Manage apps</a> → Connect an app</li>
+      <li>Add products: <b>Login Kit</b> (platform: Desktop) and <b>Content Posting API</b> with Direct Post on</li>
+      <li>Scopes: <code>user.info.basic</code>, <code>video.publish</code>, <code>video.list</code></li>
+      <li>Redirect URI: <code>${esc(tt.redirect)}</code> ${copy(tt.redirect)}</li>
+      <li>Paste the client key and secret here. Until TikTok audits the app, posts are private-only (you can still test the full flow).</li></ol>
+      <label class="f">Client key</label><input type="text" id="k-tkey"><label class="f">Client secret</label><input type="text" id="k-tsec">
+      <div class="row" style="margin-top:12px"><button class="btn" onclick="saveKeys('t')">Save</button></div>`}
+  </div>
+  <div class="panel conn"><h3>Pipeline keys</h3>
+    <div class="row" style="gap:6px;margin-top:8px"><span class="pill ${C.anthropic ? 'ok' : 'bad'}">Claude ${C.anthropic ? '✓' : '✗'}</span><span class="pill ${C.elevenlabs ? 'ok' : 'bad'}">ElevenLabs ${C.elevenlabs ? '✓' : '✗'}</span><span class="pill ${C.pexels ? 'ok' : ''}">Pexels B-roll ${C.pexels ? '✓' : 'optional'}</span></div>
+    <p class="note">Change keys: <code>uv run clipforge setup</code> · pick or clone the voice: <code>uv run clipforge voices</code></p></div>
+  </div>`;
+}
+async function saveKeys(w) {
+  const body = w === 'g' ? {GOOGLE_CLIENT_ID: $('#k-gid').value, GOOGLE_CLIENT_SECRET: $('#k-gsec').value} : {TIKTOK_CLIENT_KEY: $('#k-tkey').value, TIKTOK_CLIENT_SECRET: $('#k-tsec').value};
+  if (Object.values(body).some(v => !v.trim())) return toast('Paste both values', true);
+  try { await api('/api/keys', body); toast('Saved'); loadConn(); } catch (e) { toast(e.message, true); }
+}
+async function disc(p) { if (!confirm('Disconnect ' + p + '?')) return; await api('/api/disconnect', {platform: p}); loadConn(); }
+
+route(); refresh(); setInterval(refresh, 3000);
+setInterval(() => { if (tab === 'create') { const j = S.jobs.find(x => x.id === openJob) || S.jobs.find(x => x.status === 'running'); if (j && j.status === 'running') loadLog(j.id); } }, 2000);
+</script>
+</body>
+</html>

@@ -16,7 +16,7 @@ ALL_CARDS = CARD_TYPES | {"diagram", "cve", "reaction", "popups"}
 MOTIONS = ["pop", "punch_in", "drift"]
 
 
-def direct(script: Script, words: list[Word], short_id: str) -> ShotPlan:
+def direct(script: Script, words: list[Word], short_id: str, notes: str = "") -> ShotPlan:
     listing = "\n".join(f"{i}: {w.word}  ({w.start_ms / 1000:.2f}s)" for i, w in enumerate(words))
     ranges = beat_word_ranges([b.text for b in script.beats], len(words))
     beats = "\n".join(f"- {b.kind} (words {lo}-{hi - 1}), planned visual: {b.visual.model_dump_json(exclude_none=True)}"
@@ -24,6 +24,8 @@ def direct(script: Script, words: list[Word], short_id: str) -> ShotPlan:
     user = (f"Title: {script.title}\nHook on-screen text options: {[h.on_screen for h in script.hooks]}\n\n"
             f"Beats:\n{beats}\n\nNarration words (index: word (start time)):\n{listing}\n\n"
             f"Total length: {words[-1].end_ms / 1000:.1f}s")
+    if notes.strip():
+        user += f"\n\nNOTES FROM THE HOST on the last cut (highest priority, apply them):\n{notes.strip()}"
     return structured(PROMPT, user, ShotPlan, stage="direct", ref=short_id, effort="high", max_tokens=16000)
 
 

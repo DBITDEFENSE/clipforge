@@ -24,6 +24,7 @@ console = Console()
 def add(
     urls: list[str] = typer.Argument(..., help="YouTube / X / any yt-dlp supported links (as many as you want)"),
     go: bool = typer.Option(False, "--run", help="Process everything right after downloading"),
+    open_it: bool = typer.Option(True, "--open/--no-open"),
 ):
     """Download links into inbox/. With --run, make the shorts too."""
     ensure_dirs()
@@ -35,7 +36,7 @@ def add(
         except Exception as e:  # one bad link shouldn't sink the batch
             console.print(f"  [red]failed[/]: {e}")
     if go:
-        run(None, None, None)
+        run(None, None, None, open_it)
 
 
 @app.command()
@@ -43,6 +44,7 @@ def run(
     voice: Optional[str] = typer.Option(None, help="Override voice provider: elevenlabs | take | say"),
     per_day: Optional[int] = typer.Option(None, help="Shorts per day (default from settings)"),
     days: Optional[int] = typer.Option(None, help="How many days of posts to plan"),
+    open_it: bool = typer.Option(True, "--open/--no-open", help="Open the gallery when done"),
 ):
     """Process everything new in inbox/ end to end."""
     ensure_dirs()
@@ -57,7 +59,7 @@ def run(
     t = time.time()
     results = pipeline.run(voice)
     _summary(results, time.time() - t)
-    if results:
+    if results and open_it:
         gallery(True)
 
 
@@ -83,6 +85,7 @@ def redo(
     short_ids: list[str] = typer.Argument(..., help="Short IDs to re-direct and re-render (voice is reused, no TTS cost)"),
     keep_shots: bool = typer.Option(False, "--keep-shots", help="Reuse the existing shot plan too (render-only, no Claude calls)"),
     revoice: bool = typer.Option(False, "--revoice", help="Re-synthesize the voice with the current voice/settings (uses TTS credits)"),
+    open_it: bool = typer.Option(True, "--open/--no-open"),
 ):
     """Re-run shots -> render -> finish -> QA for existing shorts, keeping their script and voice."""
     from .config import WORK
@@ -99,7 +102,72 @@ def redo(
         results.append(pipeline.produce(sid, row["batch_id"] if row else "manual", story, script, (row["day"] or 0) if row else 0,
                                         reuse_voice=not revoice, keep_shots=keep_shots and not revoice))
     _summary(results, time.time() - t)
-    gallery(True)
+    if open_it:
+        gallery(True)
+
+
+def _load(sid: str) -> tuple[Script, Story, str, int]:
+    from .config import WORK
+
+    script = Script.model_validate_json((WORK / "shorts" / sid / "script.json").read_text(encoding="utf-8"))
+    with db.connect() as con:
+        row = con.execute("SELECT data, day, batch_id FROM stories WHERE id=?", (sid,)).fetchone()
+    story = Story.model_validate_json(row["data"]) if row else Story(
+        topic=script.title, cluster="manual", category="cyber", key_facts=[], angle="", who_affected="", how_it_works="",
+        sources=[], scores={"hook": 0, "clarity": 0, "curiosity": 0, "niche_fit": 0})
+    return script, story, (row["batch_id"] if row else "manual"), ((row["day"] or 0) if row else 0)
+
+
+@app.command()
+def revise(
+    short_id: str = typer.Argument(...),
+    notes: str = typer.Option(..., "--notes", help="What to change, in your words"),
+    scope: str = typer.Option("visuals", help="visuals (re-direct + re-render, no TTS) | script (rewrite + re-voice + re-render)"),
+):
+    """Regenerate one short with your notes."""
+    from . import schedule, write
+    from .config import WORK
+
+    script, story, batch, day = _load(short_id)
+    t = time.time()
+    if scope == "script":
+        new, issues = write.review(short_id, story, script, notes)
+        (WORK / "shorts" / short_id / "revision_notes.json").write_text(json.dumps({"notes": notes, "issues": issues}, indent=2), encoding="utf-8")
+        console.print(f"[cyan]rewrote[/] {short_id}: {len(issues)} change(s)")
+        res = pipeline.produce(short_id, batch, story, new, day)
+    else:
+        res = pipeline.produce(short_id, batch, story, script, day, reuse_voice=True, director_notes=notes)
+    schedule.set_review(short_id, "pending", None, notes)
+    _summary([res], time.time() - t)
+
+
+@app.command("publish-due")
+def publish_due():
+    """Publish whatever is due (TikTok slots that arrived, pending YouTube uploads) and update post statuses."""
+    from . import publisher
+
+    for line in publisher.tick() or ["nothing due"]:
+        console.print(line)
+
+
+@app.command()
+def stats():
+    """Pull views/likes/comments/shares for posted shorts, then show ad candidates."""
+    from . import ads, publisher
+
+    console.print(f"metrics rows: {publisher.refresh_metrics()}")
+    t = Table("short", "platform", "views", "engagement", "why", title="Ad candidates")
+    for c in ads.candidates():
+        t.add_row(c["short_id"], c["platform"], str(c["views"]), f"{c['engagement']:.1%}", ", ".join(c["why"]))
+    console.print(t)
+
+
+@app.command()
+def studio(port: int = typer.Option(8790), open_it: bool = typer.Option(True, "--open/--no-open")):
+    """The app: make shorts from links, review, schedule, publish, track."""
+    from .studio import serve
+
+    serve(port, open_it)
 
 
 @app.command()
@@ -172,8 +240,8 @@ def gallery(open_it: bool = typer.Option(True, "--open/--no-open")):
 
 @app.command()
 def review():
-    """(Phase 3: approve/reject/regenerate.) For now, opens the gallery."""
-    gallery(True)
+    """Approve / reject / regenerate: opens the studio."""
+    studio(8790, True)
 
 
 def _summary(results: list[dict], secs: float):

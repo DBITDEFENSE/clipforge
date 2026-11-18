@@ -19,11 +19,11 @@ from .transcribe import transcribe
 console = Console()
 
 
-def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: Path) -> dict:
+def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: Path, notes: str = "") -> dict:
     """Claude-directed shots; on any failure, the deterministic planner. Always returns a validated doc."""
     try:
         console.print(f"[cyan]direct[/] {short_id}")
-        plan = director.direct(script, words, short_id)
+        plan = director.direct(script, words, short_id, notes)
         (work / "shot_plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
         doc, notes = director.to_doc(plan, script, words, short_id, work)
         if notes:
@@ -35,6 +35,13 @@ def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: 
         doc["planner"] = f"fallback: {str(e)[:200]}"
         shots.validate(doc)
         return doc
+
+
+def _clean_old_outputs(short_id: str, keep: Path) -> None:
+    """A re-render can land under a new post date; drop older copies so the studio shows one card per short."""
+    for d in OUT.glob(f"*/{short_id}"):
+        if d.resolve() != keep.resolve() and d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def transcribe_pending() -> list[dict]:
@@ -66,7 +73,7 @@ def _sources_txt(story: Story) -> str:
 
 
 def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int, voice_provider: str | None = None,
-            reuse_voice: bool = False, keep_shots: bool = False) -> dict:
+            reuse_voice: bool = False, keep_shots: bool = False, director_notes: str = "") -> dict:
     """Script -> finished short. Returns a status dict; never raises."""
     work = WORK / "shorts" / short_id
     work.mkdir(parents=True, exist_ok=True)
@@ -87,7 +94,7 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
             doc = json.loads((work / "shots.json").read_text(encoding="utf-8"))
             shots.validate(doc)
         else:
-            doc = _direct_or_fallback(script, words, short_id, work)
+            doc = _direct_or_fallback(script, words, short_id, work, director_notes)
         shots_path = work / "shots.json"
         shots_path.write_text(json.dumps(doc, indent=1), encoding="utf-8")
 
@@ -122,6 +129,7 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
 
         status = "done" if report["passed"] else "flagged"
         db.upsert_short(short_id, short_id, batch_id, status, out_dir=str(out), qa=report)
+        _clean_old_outputs(short_id, out)
         return {"id": short_id, "status": status, "out": str(out), "title": script.title}
     except Exception as e:
         (work / "error.txt").write_text(traceback.format_exc(), encoding="utf-8")

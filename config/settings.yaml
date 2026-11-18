@@ -17,6 +17,7 @@ plan:
   per_video: 3                    # best N stories from each video in a batch (total = max(per_day*days, per_video*videos))
   days: 1
   timezone: America/New_York
+  slots: ["09:00", "12:00", "15:00", "18:00", "21:00"]   # daily posting times (ET)
   niche_weights: { cyber: 1.0, tech: 0.8, ai: 0.8, gaming: 0.6, other: 0.3 }
 
 script:
@@ -58,3 +59,15 @@ qa:
   min_duration_s: 25
   max_duration_s: 75
   lufs_tolerance: 1.5
+
+publish:
+  platforms: [youtube, tiktok]    # which ones the approve dialog pre-selects (only connected ones are used)
+  ai_disclosure: true             # label as AI-generated / synthetic (AI voice + generated visuals). Both platforms ask for this.
+
+ads:                              # recommendations only; ClipForge never spends money
+  min_age_hours: 24
+  min_views: 1500
+  min_engagement: 0.04            # (likes+comments+shares)/views
+  lift: 1.5                       # x your median views
+  test_daily_usd: 20
+  test_days: 3

@@ -2,7 +2,25 @@
 
 Long-form videos in, original vertical shorts out. The uploads are **research input, not footage**. ClipForge watches them, pulls out the stories, and makes new segments: original scripts, your cloned voice, original animated visuals.
 
-## Daily use
+## Daily use: the studio
+
+```powershell
+uv run clipforge studio
+```
+
+One local app (http://127.0.0.1:8790) for the whole flow:
+
+1. **Create**: paste links or drop video files. Jobs run one at a time with a live log.
+2. **Review**: watch each short, then **Approve** (pick a slot, YouTube and/or TikTok), **Regenerate** with notes (visuals only, or script + voice), or **Reject**.
+3. **Schedule**: the week's slots (`plan.slots`, Eastern), per-platform status, post now, unschedule. Mirrored to `out/queue.csv`.
+4. **Performance**: views/likes per post, refreshed every 6 h, plus **ad candidates** (beat your median views with strong engagement). ClipForge never spends money; you boost in TikTok Ads Manager and mark it here.
+5. **Connect**: link YouTube (Google OAuth) and TikTok (Content Posting API). Step-by-step setup is on the page.
+
+How posting works:
+- **YouTube** uploads right after you approve, as private with `publishAt`, so YouTube publishes it on time even if the studio is closed.
+- **TikTok** has no scheduling API, so the studio posts at the slot time **while it's running** (or run `clipforge publish-due` from Task Scheduler). The approve dialog follows TikTok's required posting UX (account shown, privacy with no default, interaction toggles, commercial disclosure, consent line). Until TikTok audits your app, posts are private-only.
+
+## CLI
 
 ```powershell
 uv run clipforge add URL1 URL2 URL3 --run   # download a batch and make the shorts (or drop files in inbox/ and `clipforge run`)
@@ -35,6 +53,8 @@ Shorts that fail QA twice are marked `flagged` (not `done`). The batch never sto
 
 ## Other commands
 
+- `clipforge revise <id> --notes "..." [--scope visuals|script]`: regenerate one short with your notes.
+- `clipforge publish-due`, `clipforge stats`: what the studio does in the background (post what's due, pull stats + ad candidates).
 - `clipforge voices`: audition voices on the same line, click "Use this", or upload 1-3 minutes of yourself to clone your voice.
 - `clipforge redo <ids...> [--keep-shots | --revoice]`: re-direct and re-render existing shorts (voice reused); `--keep-shots` is render-only, `--revoice` re-synthesizes with the current voice.
 
