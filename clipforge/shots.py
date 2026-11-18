@@ -20,6 +20,28 @@ CARD_TYPES = {"code", "terminal", "headline", "stat"}
 
 # Layout (px, 1080x1920): where captions and cards live. Validated against the safe zones.
 LAYOUT = {"content_top": 250, "content_bottom": 1130, "caption_top": 1170, "caption_bottom": 1440}
+# Gameplay split-screen: graphics + captions in the top ~58%, looping gameplay footage underneath (decorative, so the
+# platform UI may cover its bottom edge).
+LAYOUT_GAMEPLAY = {"content_top": 230, "content_bottom": 880, "caption_top": 900, "caption_bottom": 1090, "gameplay_top": 1110}
+
+
+def _gameplay(short_id: str) -> dict | None:
+    import hashlib
+
+    from .config import ROOT
+
+    try:
+        from .accounts import current
+
+        if (current().get("visuals") or {}).get("layout") != "gameplay":
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+    clips = sorted(p for p in (ROOT / "assets" / "gameplay").glob("*") if p.suffix.lower() in {".mp4", ".mov", ".webm", ".mkv"})
+    if not clips:
+        return None
+    n = int(hashlib.md5(short_id.encode()).hexdigest(), 16)
+    return {"file": str(clips[n % len(clips)]), "src": "gameplay.mp4", "start_s": (n // 7) % 120}
 
 
 def _card_props(v) -> dict:
@@ -114,7 +136,8 @@ def base_doc(script: Script, ws: list[W], short_id: str, duration: int, shots: l
         "height": cfg["height"],
         "duration_frames": duration,
         "audio": audio,
-        "layout": LAYOUT,
+        "layout": LAYOUT_GAMEPLAY if (gp := _gameplay(short_id)) else LAYOUT,
+        "gameplay": gp,
         "brand": brand(),
         "shots": shots,
         "captions": captions_for(ws, duration, cfg["fps"]),

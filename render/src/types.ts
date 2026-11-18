@@ -23,7 +23,7 @@ export interface Shot {
 export interface CaptionWord {text: string; start_frame: number; end_frame: number}
 export interface Caption {start_frame: number; end_frame: number; words: CaptionWord[]}
 
-export interface Layout {content_top: number; content_bottom: number; caption_top: number; caption_bottom: number}
+export interface Layout {content_top: number; content_bottom: number; caption_top: number; caption_bottom: number; gameplay_top?: number}
 
 export interface ShotsDoc {
   version: 1;
@@ -38,6 +38,7 @@ export interface ShotsDoc {
   brand: Brand;
   shots: Shot[];
   captions: Caption[];
+  gameplay?: {src: string; start_s: number} | null;
   [key: string]: unknown;
 }
 

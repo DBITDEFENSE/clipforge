@@ -99,6 +99,18 @@ def _scheduler():
         try:
             for line in publisher.tick():
                 TICK_LOG.append(f"{time.strftime('%H:%M')} {line}")
+            from . import autopilot as ap
+
+            for acc in accounts.all_accounts():
+                now = schedule.now()
+                if ap.due(acc["id"], now) and JOBS is not None:
+                    tok = ACTIVE.set(acc["id"])
+                    try:
+                        JOBS.add("Autopilot: check followed channels", ["autopilot"])
+                        ap.mark_ran(acc["id"], now)
+                        TICK_LOG.append(f"{time.strftime('%H:%M')} [{acc['name']}] autopilot started")
+                    finally:
+                        ACTIVE.reset(tok)
             if time.time() - last_stats > 6 * 3600:
                 publisher.refresh_metrics()
                 last_stats = time.time()
@@ -303,6 +315,24 @@ class Handler(BaseHTTPRequestHandler):
                 from .config import brand
 
                 return self._json(accounts.public(accounts.current()) | {"brand_resolved": brand()})
+            if path == "/api/autopilot":
+                from . import autopilot as ap
+
+                acc = accounts.current_id()
+                return self._json({"config": ap.config(acc), "sources": ap.sources(acc)})
+            if path == "/api/visuals":
+                from . import videogen
+
+                hub = Path.home() / ".cache" / "huggingface" / "hub" / "models--Wan-AI--Wan2.1-T2V-1.3B-Diffusers"
+                samples = sorted((OUT / "_samples").glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)[:6] if (OUT / "_samples").exists() else []
+                return self._json({"config": videogen.config(), "engines": videogen.ENGINES, "models": videogen.MODELS,
+                                   "keys": {"fal": bool(secret("FAL_KEY", False)), "replicate": bool(secret("REPLICATE_API_TOKEN", False)),
+                                            "pexels": bool(secret("PEXELS_API_KEY", False))},
+                                   "local_ready": hub.exists() and not any((hub / "blobs").glob("*.incomplete"))
+                                   and sum(p.stat().st_size for p in (hub / "blobs").glob("*")) > 28e9,
+                                   "layout": (accounts.current().get("visuals") or {}).get("layout", "full"),
+                                   "gameplay_clips": len([p for p in (ROOT / "assets" / "gameplay").glob("*") if p.suffix.lower() in VIDEO_EXT]),
+                                   "samples": [_media(p) for p in samples]})
             if path == "/api/voices/local":
                 from . import tts_local, voice
 
@@ -402,6 +432,45 @@ class Handler(BaseHTTPRequestHandler):
                 scope = "script" if b.get("scope") == "script" else "visuals"
                 job = JOBS.add(f"Regenerate {b['id']} ({scope})", ["revise", b["id"], "--notes", b.get("notes") or "Make it better.", "--scope", scope])
                 return self._json(job)
+            if path.startswith("/api/autopilot/"):
+                from . import autopilot as ap
+
+                acc, act = accounts.current_id(), path.rsplit("/", 1)[1]
+                if act == "follow":
+                    return self._json(ap.add_source(acc, b["url"], int(b.get("backfill") or 0)))
+                if act == "remove":
+                    ap.remove_source(acc, int(b["id"]))
+                elif act == "toggle":
+                    ap.toggle(acc, int(b["id"]), bool(b.get("enabled")))
+                elif act == "config":
+                    cfg = {"enabled": bool(b.get("enabled")), "max_videos": max(1, min(10, int(b.get("max_videos") or 2)))}
+                    if re.fullmatch(r"[0-2]\d:[0-5]\d", str(b.get("time", ""))):
+                        cfg["time"] = b["time"]
+                    accounts.update(acc, autopilot=cfg)
+                elif act == "run":
+                    return self._json(JOBS.add("Autopilot: check followed channels", ["autopilot"]))
+                return self._json({"ok": True})
+            if path == "/api/visuals":
+                from . import videogen
+
+                v = {}
+                if b.get("engine") in videogen.ENGINES:
+                    v["engine"] = b["engine"]
+                if isinstance(b.get("model"), str) and re.fullmatch(r"[\w./:-]{0,120}", b["model"]):
+                    v["model"] = b["model"]
+                if "max_clips" in b:
+                    v["max_clips"] = max(0, min(5, int(b["max_clips"])))
+                if "cost_per_clip" in b:
+                    v["cost_per_clip"] = max(0.0, min(20.0, float(b["cost_per_clip"])))
+                if b.get("quality") in ("fast", "normal", "best"):
+                    v["quality"] = b["quality"]
+                if b.get("layout") in ("full", "gameplay"):
+                    v["layout"] = b["layout"]
+                accounts.update(accounts.current_id(), visuals=v)
+                return self._json({"ok": True})
+            if path == "/api/visuals/test":
+                prompt = (b.get("prompt") or "").strip()[:400] or "Cinematic vertical shot of a lone cowboy silhouette at dusk riding past glowing server racks in the desert, slow push-in, warm rim light"
+                return self._json(JOBS.add("Test video model", ["video-test", "--prompt", prompt]))
             if path == "/api/revoice":
                 return self._json(JOBS.add(f"Re-voice {b['id']}", ["redo", b["id"], "--revoice", "--no-open"]))
             if path == "/api/account":
@@ -435,7 +504,8 @@ class Handler(BaseHTTPRequestHandler):
                 publisher.post_now(b["id"], b["platform"])
                 return self._json({"ok": True})
             if path == "/api/keys":
-                keys = {k: (b.get(k) or "").strip() for k in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET")}
+                keys = {k: (b.get(k) or "").strip() for k in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET",
+                                                              "FAL_KEY", "REPLICATE_API_TOKEN", "PEXELS_API_KEY")}
                 keys = {k: v for k, v in keys.items() if v}
                 write_env(keys)
                 os.environ.update(keys)

@@ -65,8 +65,8 @@ def check_password(acc: dict, pw: str) -> bool:
 
 def _row(r) -> dict:
     d = dict(r)
-    for k in ("brand", "slots", "voice"):
-        d[k] = json.loads(d[k] or ("[]" if k == "slots" else "{}"))
+    for k in ("brand", "slots", "voice", "visuals", "autopilot"):
+        d[k] = json.loads(d.get(k) or ("[]" if k == "slots" else "{}"))
     return d
 
 
@@ -101,7 +101,7 @@ def update(sid: str, **f) -> dict:
     if "password" in f:
         pw = f.pop("password")
         f["password_hash"] = _hash(pw) if pw else None
-    for k in ("brand", "voice"):
+    for k in ("brand", "voice", "visuals", "autopilot"):
         if k in f:
             f[k] = json.dumps(acc[k] | f[k])
     if "slots" in f:

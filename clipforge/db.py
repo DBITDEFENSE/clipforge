@@ -83,6 +83,8 @@ MIGRATIONS = [
     "ALTER TABLE shorts ADD COLUMN account TEXT NOT NULL DEFAULT 'dbit-defense'",
     "ALTER TABLE videos ADD COLUMN account TEXT NOT NULL DEFAULT 'dbit-defense'",
     "ALTER TABLE stories ADD COLUMN account TEXT NOT NULL DEFAULT 'dbit-defense'",
+    "ALTER TABLE accounts ADD COLUMN visuals TEXT",
+    "ALTER TABLE accounts ADD COLUMN autopilot TEXT",
 ]
 
 

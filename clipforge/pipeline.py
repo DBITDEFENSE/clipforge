@@ -25,7 +25,12 @@ def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: 
         console.print(f"[cyan]direct[/] {short_id}")
         plan = director.direct(script, words, short_id, notes)
         (work / "shot_plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-        doc, notes = director.to_doc(plan, script, words, short_id, work)
+        try:
+            doc, notes = director.to_doc(plan, script, words, short_id, work)
+        finally:
+            from . import videogen
+
+            videogen.release()  # free the local video model's VRAM before rendering
         if notes:
             console.print(f"  director repairs: {'; '.join(notes[:6])}")
         return doc

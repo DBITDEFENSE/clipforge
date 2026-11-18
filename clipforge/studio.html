@@ -239,8 +239,31 @@ function vMake() {
   </div><div class="panel"><h3 style="margin-bottom:12px">Jobs</h3>
     <div class="jobs">${S.jobs.length ? S.jobs.map(j => `<div class="job" onclick="openJob='${j.id}';lastRender='';render()"><span class="dot ${j.status}"></span><div class="grow">${esc(j.label)}<div class="note" style="margin:0">${j.status}${j.ended && j.started ? ` · ${Math.max(1, Math.round((j.ended - j.started) / 60))} min` : ''}</div></div></div>`).join('') : '<div class="muted small">Nothing yet. Jobs run one at a time; you can leave this page.</div>'}</div>
   </div></div>
+  ${autopilotPanel()}
   ${job ? `<h2>${esc(job.label)} · ${job.status}</h2><details ${job.status === 'failed' ? 'open' : ''}><summary>Show the technical log</summary><div class="log" id="log">loading…</div></details>` : ''}`;
 }
+let AP = null;
+async function loadAP() { try { AP = await api('/api/autopilot'); lastRender = ''; render(); } catch (e) { AP = {error: e.message}; } }
+function autopilotPanel() {
+  if (!AP) { loadAP(); return ''; }
+  if (AP.error) return '';
+  const c = AP.config;
+  return `<h2>Autopilot</h2><div class="panel"><div class="row"><div class="grow"><h3>Follow channels, get shorts every morning</h3><p class="note" style="margin:4px 0 0">Each day at the time below, ClipForge checks these channels and turns new uploads into ${esc(ME.name)} shorts. They wait in Review; nothing posts without you.</p></div>
+      <label class="chk" style="font-weight:800"><input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="apCfg({enabled:this.checked})"> On</label></div>
+    <div class="row" style="margin-top:12px;gap:18px"><label class="row small" style="gap:8px">Run daily at <input type="text" value="${esc(c.time)}" style="width:90px" onchange="apCfg({time:this.value})"> ET</label>
+      <label class="row small" style="gap:8px">Max new videos per run <input type="text" value="${c.max_videos}" style="width:60px" onchange="apCfg({max_videos:parseInt(this.value)||2})"></label>
+      <span class="note" style="margin:0">${c.last_run ? 'Last run ' + esc(c.last_run) : 'Not run yet'}</span><button class="btn sm ghost" onclick="apRun()">Check now</button></div>
+    <div style="margin-top:14px">${AP.sources.map(s => `<div class="job" style="cursor:default"><span class="dot ${s.enabled ? 'done' : ''}"></span><div class="grow"><b>${esc(s.label)}</b><div class="note" style="margin:0">${esc(s.url)}${s.last_checked ? ' · checked ' + new Date(s.last_checked * 1000).toLocaleString() : ''}</div></div>
+      <button class="btn sm ghost" onclick="apToggle(${s.id}, ${!s.enabled})">${s.enabled ? 'Pause' : 'Resume'}</button><button class="btn sm bad" onclick="apRemove(${s.id})">Remove</button></div>`).join('') || '<div class="note">No channels yet.</div>'}</div>
+    <div class="row" style="margin-top:12px"><input type="text" id="ap-url" placeholder="@channel or https://www.youtube.com/@channel" style="flex:1"><button class="btn sm" onclick="apFollow()">Follow</button></div>
+    <p class="note">New follows only pick up future uploads.</p></div>`;
+}
+async function apCfg(v) { try { await api('/api/autopilot/config', {...AP.config, ...v}); AP = null; loadAP(); } catch (e) { toast(e.message, true); } }
+async function apFollow() { const url = $('#ap-url').value.trim(); if (!url) return; toast('Looking up the channel…'); try { const s = await api('/api/autopilot/follow', {url}); $('#ap-url').value = ''; toast('Following ' + s.label); AP = null; loadAP(); } catch (e) { toast(e.message, true); } }
+async function apRemove(id) { if (!confirm('Stop following this channel?')) return; await api('/api/autopilot/remove', {id}); AP = null; loadAP(); }
+async function apToggle(id, enabled) { await api('/api/autopilot/toggle', {id, enabled}); AP = null; loadAP(); }
+async function apRun() { try { const j = await api('/api/autopilot/run', {}); openJob = j.id; toast('Checking channels…'); refresh(); } catch (e) { toast(e.message, true); } }
+
 async function loadLog(id) {
   try { const j = await api('/api/job/' + id); const job = S.jobs.find(x => x.id === id);
     const st = stageOf(j.log); if (st && st !== STAGE[id]) { STAGE[id] = st; lastRender = ''; render(); }
@@ -443,8 +466,8 @@ async function markAd(id, status) { let spend = null; if (status === 'boosted') 
 async function loadConn() { try { C = await api('/api/connections'); lastRender = ''; render(); } catch (e) {} }
 async function loadVoices() { try { V = await api('/api/voices'); lastRender = ''; render(); } catch (e) { V = {error: e.message}; lastRender = ''; render(); } }
 function vSettings() {
-  const side = [['channel', 'Channel'], ['voice', 'Voice'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
-  const body = {channel: sChannel, voice: sVoice, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
+  const side = [['channel', 'Channel'], ['voice', 'Voice'], ['visuals', 'Visuals & video models'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
+  const body = {channel: sChannel, voice: sVoice, visuals: sVisuals, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
   return `<h1>Settings</h1><p class="sub">Everything here applies to <b>${esc(ME.name)}</b> only.</p>
   <div class="set"><div class="side">${side.map(([k, l]) => `<a class="${setTab === k ? 'on' : ''}" onclick="setTab='${k}';lastRender='';render()">${l}</a>`).join('')}</div><div>${body()}</div></div>`;
 }
@@ -536,6 +559,40 @@ function sPlatforms() {
   <div class="panel"><h3>Pipeline keys</h3><div class="row" style="gap:6px;margin-top:10px"><span class="pill ${C.anthropic ? 'ok' : 'bad'}">Claude ${C.anthropic ? '✓' : '✗'}</span><span class="pill ${C.elevenlabs ? 'ok' : 'bad'}">ElevenLabs ${C.elevenlabs ? '✓' : '✗'}</span><span class="pill ${C.pexels ? 'ok' : ''}">Stock B-roll ${C.pexels ? '✓' : '(optional)'}</span></div>
     <p class="note">Change these with <code>uv run clipforge setup</code>.</p></div></div>`;
 }
+let VIS = null;
+async function loadVis() { try { VIS = await api('/api/visuals'); lastRender = ''; render(); } catch (e) { VIS = {error: e.message}; } }
+function sVisuals() {
+  if (!VIS) { loadVis(); return '<div class="panel">Loading…</div>'; }
+  if (VIS.error) return `<div class="panel note w">${esc(VIS.error)}</div>`;
+  const c = VIS.config, eng = c.engine, models = VIS.models[eng] || [];
+  const keyFor = {fal: ['FAL_KEY', VIS.keys.fal, 'https://fal.ai/dashboard/keys'], replicate: ['REPLICATE_API_TOKEN', VIS.keys.replicate, 'https://replicate.com/account/api-tokens'], pexels: ['PEXELS_API_KEY', VIS.keys.pexels, 'https://www.pexels.com/api/']}[eng];
+  const desc = {none: 'Only animated graphics, memes and text. Fastest, zero cost.', pexels: 'Real licensed stock clips (free key from Pexels).',
+    local_wan: 'Generates original clips on your RTX 5090 with Wan 2.1 (open source). Free, about 1-3 min per clip. First use downloads ~29 GB.',
+    fal: 'One fal.ai key unlocks many hosted models (Kling, Veo, Hailuo, Wan 2.2, LTX, Seedance). You pay fal per clip.',
+    replicate: 'One Replicate key unlocks many hosted models. You pay Replicate per clip.'};
+  const ai = ['local_wan', 'fal', 'replicate'].includes(eng);
+  return `<div class="panel"><h3>B-roll source</h3><p class="note" style="margin:6px 0 14px">What fills the "show, don't tell" moments between graphics. The director writes a prompt for each clip; anything that fails falls back to motion graphics.</p>
+    ${Object.entries(VIS.engines).map(([k, l]) => `<label class="voice ${eng === k ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="radio" name="eng" ${eng === k ? 'checked' : ''} onchange="saveVis({engine:'${k}', model:''})" style="accent-color:var(--accent);width:18px;height:18px">
+      <div><b>${esc(l)}</b>${k === 'local_wan' ? (VIS.local_ready ? ' <span class="pill ok">downloaded</span>' : ' <span class="pill warn">downloads on first use</span>') : ''}<div class="note" style="margin:2px 0 0">${desc[k]}</div></div></label>`).join('')}
+    ${models.length ? `<label class="f">Model <small>${eng === 'local_wan' ? '' : 'pick one, or type any model id from the provider'}</small></label>
+      <div class="row"><select id="vis-model" style="flex:1" onchange="saveVis({model:this.value})">${models.map(m => `<option value="${esc(m.id)}" ${m.id === c.model ? 'selected' : ''}>${esc(m.name)} · ${m.tier}</option>`).join('')}${models.some(m => m.id === c.model) ? '' : `<option selected value="${esc(c.model)}">${esc(c.model)}</option>`}</select>
+      ${eng !== 'local_wan' ? `<input type="text" id="vis-custom" placeholder="custom model id" style="flex:1"><button class="btn sm ghost" onclick="saveVis({model:$('#vis-custom').value.trim()})">Use</button>` : ''}</div>` : ''}
+    ${ai ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
+      <div><label class="f">Max AI clips per short <small>${c.max_clips}</small></label><input type="range" min="0" max="5" step="1" value="${c.max_clips}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_clips:parseInt(this.value)})"></div>
+      ${eng === 'local_wan' ? `<div><label class="f">Quality</label><div class="tabs" style="margin:0">${['fast', 'normal', 'best'].map(q => `<button class="tab ${c.quality === q ? 'on' : ''}" onclick="saveVis({quality:'${q}'})">${q}</button>`).join('')}</div></div>`
+        : `<div><label class="f">Est. cost per clip <small>for the cost log, USD</small></label><input type="text" value="${c.cost_per_clip}" onchange="saveVis({cost_per_clip:parseFloat(this.value)||0})"></div>`}</div>` : ''}
+    ${keyFor ? `<label class="f">${keyFor[0]} ${keyFor[1] ? '<span class="pill ok">saved</span>' : `<small><a href="${keyFor[2]}" target="_blank">get a key</a></small>`}</label><div class="row"><input type="text" id="vis-key" placeholder="${keyFor[1] ? 'saved (paste to replace)' : 'paste key'}" style="flex:1"><button class="btn sm" onclick="saveVisKey('${keyFor[0]}')">Save key</button></div>` : ''}
+    ${ai ? `<label class="f">Try it <small>generates one clip with this model</small></label><div class="row"><input type="text" id="vis-prompt" placeholder="Cinematic vertical shot of a cowboy silhouette walking past glowing server racks at dusk" style="flex:1"><button class="btn sm alt" onclick="testVis()">Generate test clip</button></div>
+      ${VIS.samples.length ? `<div class="grid" style="margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${VIS.samples.map(u => `<video src="${u}" controls muted loop style="width:100%;aspect-ratio:9/16;border-radius:12px;background:#000"></video>`).join('')}</div>` : ''}` : ''}
+  </div>
+  <div class="panel" style="margin-top:16px"><h3>Layout</h3>
+    <div class="tabs" style="margin:10px 0 0"><button class="tab ${VIS.layout === 'full' ? 'on' : ''}" onclick="saveVis({layout:'full'})">Full screen</button><button class="tab ${VIS.layout === 'gameplay' ? 'on' : ''}" onclick="saveVis({layout:'gameplay'})">Gameplay split-screen</button></div>
+    <p class="note">${VIS.layout === 'gameplay' ? `Graphics on top, your gameplay footage looping underneath. ${VIS.gameplay_clips ? VIS.gameplay_clips + ' clip(s) found' : '<b style="color:var(--warn)">No clips yet</b>'} in <code>assets/gameplay/</code> (use footage you recorded or have rights to).` : 'Graphics use the whole frame.'}</p></div>`;
+}
+async function saveVis(v) { try { await api('/api/visuals', v); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
+async function saveVisKey(name) { const v = $('#vis-key').value.trim(); if (!v) return toast('Paste the key first', true); try { await api('/api/keys', {[name]: v}); toast('Key saved'); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
+async function testVis() { try { const j = await api('/api/visuals/test', {prompt: $('#vis-prompt').value}); openJob = j.id; toast('Generating a test clip. Watch it on the Make tab; it appears here when done.'); refresh(); } catch (e) { toast(e.message, true); } }
+
 function sSecurity() {
   return `<div class="panel"><h3>Password</h3><p class="note">${ME.has_password ? 'This channel is password-protected in the studio.' : 'No password: anyone using this PC can open this channel.'}</p>
     <label class="f">New password <small>leave empty and save to remove</small></label><input type="password" id="pw1">

@@ -8,7 +8,7 @@ def test_director_repairs_a_sloppy_plan(tmp_path):
     words = make_words(s)
     n = len(words)
     E = dict(card_key="", text="", kicker="", value="", label="", score=0, lines=[], code_language="", highlight=0,
-             broll_query="", lower_title="", lower_sub="", emoji="", fx="none", sfx="none")
+             broll_query="", video_prompt="", lower_title="", lower_sub="", emoji="", fx="none", sfx="none")
     S = lambda **kw: DirectedShot(**(E | kw))  # noqa: E731
     plan = ShotPlan(shots=[
         S(start_word=3, type="kinetic", motion="pop", text="Front door *open*"),   # doesn't start at 0

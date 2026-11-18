@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import broll, sfx
+from . import broll, sfx, videogen
 from .config import settings
 from .llm import structured
 from .schemas import DirectedShot, Script, ShotPlan, Word
@@ -24,6 +24,11 @@ def direct(script: Script, words: list[Word], short_id: str, notes: str = "") ->
     user = (f"Title: {script.title}\nHook on-screen text options: {[h.on_screen for h in script.hooks]}\n\n"
             f"Beats:\n{beats}\n\nNarration words (index: word (start time)):\n{listing}\n\n"
             f"Total length: {words[-1].end_ms / 1000:.1f}s")
+    vc = videogen.config()
+    user += {"none": "\n\nB-roll: disabled for this channel. Do not use `broll` shots.",
+             "pexels": "\n\nB-roll source: stock footage. Use 0-2 `broll` shots with filmable `broll_query`.",
+             }.get(vc["engine"], f"\n\nB-roll source: an AI video model. Use up to {vc['max_clips']} `broll` shots at the most visual "
+                                 "moments, each with a vivid `video_prompt` (no real people's likeness, no logos, no text).")
     if notes.strip():
         user += f"\n\nNOTES FROM THE HOST on the last cut (highest priority, apply them):\n{notes.strip()}"
     from .accounts import current
@@ -127,21 +132,37 @@ def to_doc(plan: ShotPlan, script: Script, words: list[Word], short_id: str, wor
             notes.append(f"split a {(b - a) / 1000:.1f}s {s.type} shot into {len(starts)}")
 
     # 3. frames, props, card continuity, B-roll
-    shots, card_start, broll_n = [], {}, 0
+    shots, card_start, broll_n, last_broll = [], {}, 0, None
     for k, (s, wi, sub) in enumerate(final):
         sf = ms_to_frame(start_ms(wi), fps)
         ef = ms_to_frame(start_ms(final[k + 1][1]), fps) if k + 1 < len(final) else duration
         if ef <= sf:
             continue
         typ, props = s.type, _props(s)
-        if typ == "broll":
-            src = broll.fetch(s.broll_query, workdir / f"broll_{broll_n}.mp4")
+        if typ == "broll" and sub == 0:
+            src, credit = None, ""
+            vc = videogen.config()
+            if videogen.wants_ai(vc) and broll_n < int(vc["max_clips"]):
+                got = videogen.generate(s.video_prompt or f"Cinematic vertical shot: {s.broll_query}",
+                                        workdir / f"broll_{broll_n}.mp4", short_id, vc)
+                if got:
+                    src, credit = got
+            elif vc["engine"] == "pexels":
+                src = broll.fetch(s.broll_query, workdir / f"broll_{broll_n}.mp4")
+                credit = broll.last_credit() if src else ""
             if src:
-                props = {"src": src.name, "text": s.text, "credit": broll.last_credit()}
+                props = {"src": src.name, "text": s.text, "credit": credit}
+                last_broll = props
                 broll_n += 1
             else:
                 typ, props = "kinetic", {"text": s.text or s.broll_query}
-                notes.append(f"no B-roll for '{s.broll_query}', used kinetic")
+                last_broll = None
+                notes.append(f"no B-roll for '{s.broll_query}' ({vc['engine']}), used kinetic")
+        elif typ == "broll":  # later sub-shots of the same B-roll beat keep the same clip
+            if last_broll:
+                props = dict(last_broll)
+            else:
+                typ, props = "kinetic", {"text": s.text or s.broll_query}
         if typ in ALL_CARDS:
             key = s.card_key or f"{typ}-{id(s)}"
             card_start.setdefault(key, sf)

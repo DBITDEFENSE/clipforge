@@ -23,6 +23,9 @@ def render_video(shots_path: Path, workdir: Path) -> Path:
 
     doc = json.loads(shots_path.read_text(encoding="utf-8"))
     sfx.stage({Path(s["props"]["sfx_src"]).stem for s in doc["shots"] if s["props"].get("sfx_src")}, workdir)
+    gp = doc.get("gameplay")
+    if gp and Path(gp["file"]).exists() and not (workdir / gp["src"]).exists():
+        shutil.copy2(gp["file"], workdir / gp["src"])
     out = workdir / "render.mp4"
     crf = settings()["finish"]["crf"]
     _remotion(["render", "src/index.ts", "Short", str(out), f"--props={shots_path}", "--codec=h264",

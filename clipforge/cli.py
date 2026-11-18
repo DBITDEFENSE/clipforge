@@ -163,6 +163,53 @@ def revise(
     _summary([res], time.time() - t)
 
 
+@app.command()
+def autopilot(
+    follow: Optional[str] = typer.Option(None, help="Follow a channel URL or @handle for this account"),
+    backfill: int = typer.Option(0, help="With --follow: also process this many of its latest uploads"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Just show what's new"),
+    open_it: bool = typer.Option(False, "--open/--no-open"),
+):
+    """Check followed channels for new uploads and make shorts from them (they land in Review)."""
+    from . import accounts
+    from . import autopilot as ap
+
+    acc = accounts.current_id()
+    if follow:
+        s = ap.add_source(acc, follow, backfill)
+        console.print(f"following [cyan]{s['label']}[/] ({s['url']}); latest: {[x['title'][:50] for x in s['latest']]}")
+        return
+    cfg = ap.config(acc)
+    new = ap.new_uploads(acc, int(cfg["max_videos"])) if not dry_run else []
+    if dry_run:
+        for s in ap.sources(acc):
+            console.print(f"{s['label']}: {s['url']}")
+        return
+    if not new:
+        console.print("No new uploads.")
+        return
+    for it in new:
+        console.print(f"[cyan]new[/] {it['source']}: {it['title']}")
+    add([it["url"] for it in new], True, open_it)
+
+
+@app.command("video-test")
+def video_test(prompt: str = typer.Option(..., help="What to generate")):
+    """Generate one sample clip with this channel's video model -> out/_samples/."""
+    from . import videogen
+    from .config import OUT
+
+    c = videogen.config()
+    console.print(f"[cyan]video model[/] {c['engine']}: {c['model']}")
+    (OUT / "_samples").mkdir(parents=True, exist_ok=True)
+    t = time.time()
+    got = videogen.generate(prompt, OUT / "_samples" / f"sample_{time.strftime('%Y%m%d-%H%M%S')}.mp4", "video-test", c)
+    if not got:
+        console.print("[red]no clip (engine is not an AI model, missing key, or the model failed; see above)[/]")
+        raise typer.Exit(1)
+    console.print(f"done in {time.time() - t:.0f}s: {got[0]}")
+
+
 @app.command("publish-due")
 def publish_due():
     """Publish whatever is due (TikTok slots that arrived, pending YouTube uploads) and update post statuses."""

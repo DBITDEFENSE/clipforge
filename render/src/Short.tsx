@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame} from 'remotion';
+import {AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame, Video} from 'remotion';
 import {Background} from './components/Background';
 import {BRoll} from './components/BRoll';
 import {CVEScoreCard} from './components/CVEScoreCard';
@@ -80,6 +80,11 @@ const Chrome: React.FC<{doc: ShotsDoc}> = ({doc}) => {
 export const Short: React.FC<ShotsDoc> = (doc) => (
   <AbsoluteFill>
     <Background brand={doc.brand} />
+    {doc.gameplay && doc.layout.gameplay_top ? (
+      <div style={{position: 'absolute', left: 0, right: 0, top: doc.layout.gameplay_top, bottom: 0, overflow: 'hidden', borderTop: `6px solid ${palette(doc.brand.colors).accent}`}}>
+        <Video src={staticFile(doc.gameplay.src)} startFrom={Math.round(doc.gameplay.start_s * doc.fps)} muted loop style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+      </div>
+    ) : null}
     {doc.shots.map((s) => (
       <Sequence key={s.id} from={s.start_frame} durationInFrames={s.end_frame - s.start_frame} premountFor={10}>
         <ShotView shot={s} doc={doc} />

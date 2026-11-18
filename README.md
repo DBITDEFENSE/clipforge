@@ -26,6 +26,13 @@ How posting works:
   blend, pace, pitch, warmth/grit, expressiveness, pauses, and a Southern/country accent (phoneme-level drawl: off / light / full).
 - **AI meme**: every short gets a meme written by a dedicated Claude pass (nope/yep, expectation vs reality, galaxy brain,
   starter pack, two buttons, POV, nobody, calm chaos), drawn with emoji + meme type and placed to play inside the first 6 seconds.
+- **Video models (Settings > Visuals)**: B-roll from motion graphics only, Pexels stock, **local Wan 2.1** (free, on the
+  GPU, ~29 GB one-time download), or any **fal.ai** / **Replicate** text-to-video model (Kling, Veo, Hailuo, Wan 2.2, LTX,
+  Seedance...; your key, capped clips per short, estimated cost logged). The director writes a prompt per clip (no real
+  people's likeness, logos or text); failures fall back to motion graphics. `clipforge video-test --prompt "..."` tries a model.
+- **Gameplay split-screen**: Settings > Visuals > Layout. Graphics on top, your footage from `assets/gameplay/` looping below.
+- **Autopilot (Make tab)**: follow channels (e.g. @Fireship); each day at the set time new uploads become shorts for that
+  channel and wait in Review. Off by default (it spends Claude credits). CLI: `clipforge --account <id> autopilot [--follow @x]`.
 - **Length**: scripts target ~30 s (65-85 words); QA accepts 20-45 s.
 - **Preview voice**: if ElevenLabs is out of credits, shorts render with a robotic placeholder voice and are marked
   "Preview voice". They can't be scheduled until you hit **Re-voice** (after topping up).
