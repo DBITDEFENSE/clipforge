@@ -59,7 +59,8 @@ def approve(short_id: str, slot_iso: str, targets: dict) -> None:
         if t.get("branded_content") and t["privacy"] == "SELF_ONLY":
             raise ValueError("branded content can't be private on TikTok")
     with db.connect() as con:
-        clash = con.execute("SELECT id FROM shorts WHERE review='approved' AND slot=? AND id!=?", (slot_iso, short_id)).fetchone()
+        clash = con.execute("SELECT id FROM shorts WHERE review='approved' AND slot=? AND id!=? AND account=(SELECT account FROM shorts WHERE id=?)",
+                            (slot_iso, short_id, short_id)).fetchone()
     if clash:
         raise ValueError(f"that slot is already taken by {clash['id']}")
     schedule.set_review(short_id, "approved", slot_iso)
@@ -128,11 +129,25 @@ def _publish_one(short_id: str, platform: str) -> None:
 
 
 def tick() -> list[str]:
-    """Do whatever is due. Safe to call every minute. Returns a log of what happened."""
+    """Do whatever is due, for every account (each with its own platform tokens). Safe to call every minute."""
+    from .accounts import ACTIVE, all_accounts
+
+    log = []
+    for acc in all_accounts():
+        tok = ACTIVE.set(acc["id"])
+        try:
+            log += [f"[{acc['name']}] {line}" for line in _tick_account(acc["id"])]
+        finally:
+            ACTIVE.reset(tok)
+    return log
+
+
+def _tick_account(account: str) -> list[str]:
     log, now = [], schedule.now()
     with db.connect() as con:
         rows = [dict(r) for r in con.execute(
-            "SELECT p.* FROM posts p JOIN shorts s ON s.id=p.short_id WHERE s.review='approved' AND p.status IN ('queued','uploading','scheduled')")]
+            "SELECT p.* FROM posts p JOIN shorts s ON s.id=p.short_id WHERE s.review='approved' AND s.account=? "
+            "AND p.status IN ('queued','uploading','scheduled')", (account,))]
     for r in rows:
         sid, plat, st = r["short_id"], r["platform"], r["status"]
         when = dt.datetime.fromisoformat(r["scheduled_at"])
@@ -163,9 +178,23 @@ def tick() -> list[str]:
 
 
 def refresh_metrics() -> int:
-    """Pull view/like/comment/share counts for everything posted. Returns rows written."""
+    """Pull view/like/comment/share counts for everything posted, per account. Returns rows written."""
+    from .accounts import ACTIVE, all_accounts
+
+    n = 0
+    for acc in all_accounts():
+        tok = ACTIVE.set(acc["id"])
+        try:
+            n += _metrics_account(acc["id"])
+        finally:
+            ACTIVE.reset(tok)
+    return n
+
+
+def _metrics_account(account: str) -> int:
     with db.connect() as con:
-        rows = [dict(r) for r in con.execute("SELECT short_id, platform, remote_id FROM posts WHERE status IN ('posted','scheduled') AND remote_id IS NOT NULL")]
+        rows = [dict(r) for r in con.execute("SELECT p.short_id, p.platform, p.remote_id FROM posts p JOIN shorts s ON s.id=p.short_id "
+                                             "WHERE s.account=? AND p.status IN ('posted','scheduled') AND p.remote_id IS NOT NULL", (account,))]
     n, ts = 0, time.time()
     for plat, client in (("youtube", youtube), ("tiktok", tiktok)):
         mine = {r["remote_id"]: r["short_id"] for r in rows if r["platform"] == plat}

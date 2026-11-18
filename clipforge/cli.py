@@ -20,6 +20,29 @@ app = typer.Typer(add_completion=False, help="ClipForge: long videos in, origina
 console = Console()
 
 
+@app.callback()
+def _global(account: Optional[str] = typer.Option(None, "--account", "-a", help="Channel account id (e.g. cyber-cowboy). Default: first account.")):
+    import os
+
+    from . import accounts
+
+    accounts.ensure()
+    if account:
+        accounts.get(account)  # fail fast on a typo
+        os.environ["CLIPFORGE_ACCOUNT"] = account
+
+
+@app.command()
+def channels():
+    """List channel accounts."""
+    from . import accounts
+
+    t = Table("id", "name", "handle", "voice", "password")
+    for a in accounts.all_accounts():
+        t.add_row(a["id"], a["name"], a.get("handle") or "", (a["voice"] or {}).get("voice_id", ""), "yes" if a.get("password_hash") else "")
+    console.print(t)
+
+
 @app.command()
 def add(
     urls: list[str] = typer.Argument(..., help="YouTube / X / any yt-dlp supported links (as many as you want)"),
@@ -55,7 +78,6 @@ def run(
     secret("ANTHROPIC_API_KEY")
     if (voice or settings()["voice"]["provider"]) == "elevenlabs":
         secret("ELEVENLABS_API_KEY")
-        secret("ELEVENLABS_VOICE_ID")
     t = time.time()
     results = pipeline.run(voice)
     _summary(results, time.time() - t)

@@ -51,7 +51,7 @@ def problems(script: Script) -> list[str]:
 
 def write(story_id: str, story: Story) -> Script:
     cfg = settings()
-    system = PROMPT_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"]))
+    system = PROMPT_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"])) + _channel()
     user = (f"Story:\n{story.model_dump_json(indent=2)}\n\n"
             f"Source excerpts (research only; do not reuse wording):\n{_excerpts(story)}")
     script = structured(system, user, Script, stage="write", ref=story_id, effort=cfg["claude"]["effort_write"])
@@ -67,6 +67,19 @@ def write(story_id: str, story: Story) -> Script:
     return script
 
 
+def _channel() -> str:
+    """The active account's persona + what has performed on this channel (feedback loop)."""
+    from . import feedback
+    from .accounts import current
+
+    try:
+        acc = current()
+    except Exception:  # noqa: BLE001
+        return ""
+    head = "\n\n## This channel (overrides generic voice notes above where they conflict)\n"
+    return head + (acc.get("persona") or "") + "\n" + feedback.summary(acc["id"])
+
+
 REVIEW_TMPL = (Path(__file__).parent / "prompts" / "review.md").read_text(encoding="utf-8")
 
 
@@ -74,7 +87,7 @@ def review(story_id: str, story: Story, script: Script, notes: str = "") -> tupl
     """Separate editor pass: facts vs sources, 2-second hook, pacing, clarity. Keeps the draft if the revision breaks rules.
     `notes` = the host's own feedback; applied first, as long as the facts and rules still hold."""
     cfg = settings()
-    system = REVIEW_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"]))
+    system = REVIEW_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"])) + _channel()
     user = (f"Story facts:\n{story.model_dump_json(indent=2)}\n\nSource excerpts:\n{_excerpts(story)}\n\n"
             f"Draft script:\n{script.model_dump_json(indent=2)}")
     if notes.strip():

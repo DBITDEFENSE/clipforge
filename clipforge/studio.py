@@ -22,7 +22,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import ads, db, publisher, schedule
+from . import accounts, ads, db, publisher, schedule, voice_lab
+from .accounts import ACTIVE
 from .config import DATA, INBOX, OUT, ROOT, WORK, secret, settings
 from .publish import NotConnected, forget, tiktok, youtube
 from .setup_page import write_env
@@ -44,8 +45,9 @@ class Jobs:
         threading.Thread(target=self._worker, daemon=True).start()
 
     def add(self, label: str, args: list[str]) -> dict:
-        job = {"id": uuid.uuid4().hex[:8], "label": label, "args": args, "status": "queued", "created": time.time(),
-               "started": None, "ended": None}
+        acc = accounts.current_id()
+        job = {"id": uuid.uuid4().hex[:8], "label": label, "args": ["--account", acc, *args], "account": acc, "status": "queued",
+               "created": time.time(), "started": None, "ended": None}
         with self.lock:
             self.items.append(job)
         self.wake.set()
@@ -60,7 +62,8 @@ class Jobs:
 
     def public(self) -> list[dict]:
         with self.lock:
-            return [{k: v for k, v in j.items() if k != "args"} for j in self.items[-15:]][::-1]
+            acc = accounts.current_id()
+            return [{k: v for k, v in j.items() if k != "args"} for j in self.items if j.get("account") == acc][-15:][::-1]
 
     def busy(self) -> bool:
         with self.lock:
@@ -85,7 +88,8 @@ class Jobs:
 
 
 JOBS: Jobs | None = None
-OAUTH: dict[str, dict] = {}  # state -> {platform, verifier}
+OAUTH: dict[str, dict] = {}  # state -> {platform, verifier, account}
+SESSIONS: dict[str, str] = {}  # cookie token -> account id (signing in again after a studio restart is expected)
 TICK_LOG: list[str] = []
 
 
@@ -116,7 +120,7 @@ def _media(p: Path) -> str:
 
 def shorts_state() -> list[dict]:
     with db.connect() as con:
-        rows = [dict(r) for r in con.execute("SELECT * FROM shorts ORDER BY created DESC")]
+        rows = [dict(r) for r in con.execute("SELECT * FROM shorts WHERE account=? ORDER BY created DESC", (accounts.current_id(),))]
         posts = {}
         for r in con.execute("SELECT * FROM posts"):
             posts.setdefault(r["short_id"], {})[r["platform"]] = {k: r[k] for k in ("status", "scheduled_at", "url", "error", "remote_id")}
@@ -128,7 +132,7 @@ def shorts_state() -> list[dict]:
     for r in rows:
         d = Path(r["out_dir"]) if r["out_dir"] else None
         has = d is not None and (d / "final.mp4").exists()
-        if not has and r["status"] in ("done", "flagged"):
+        if not has and r["status"] in ("done", "flagged", "preview"):
             continue  # stale row whose files were deleted
         script = {}
         sp = WORK / "shorts" / r["id"] / "script.json"
@@ -140,6 +144,7 @@ def shorts_state() -> list[dict]:
             "title": script.get("title", r["id"]), "video": _media(d / "final.mp4") + f"?v={int(r['updated'])}" if has else None,
             "cover": _media(d / "cover.png") + f"?v={int(r['updated'])}" if has and (d / "cover.png").exists() else None,
             "qa_pass": qa.get("passed"), "qa_fail": [c["name"] for c in qa.get("checks", []) if not c["ok"]],
+            "originality": qa.get("originality"), "voice_preview": r["status"] == "preview" or qa.get("voice_preview", False),
             "duration": next((c["detail"] for c in qa.get("checks", []) if c["name"] == "duration"), ""),
             "post": script.get("post", {}), "hooks": script.get("hooks", []),
             "beats": [{"kind": b["kind"], "text": b["text"]} for b in script.get("beats", [])],
@@ -168,7 +173,7 @@ def connections() -> dict:
         "tiktok": {"configured": tiktok.configured(), "connected": tiktok.connected(),
                    "redirect": f"http://localhost:{port}/oauth/tiktok/callback/"},
         "anthropic": bool(secret("ANTHROPIC_API_KEY", False)),
-        "elevenlabs": bool(secret("ELEVENLABS_API_KEY", False)), "voice_id": secret("ELEVENLABS_VOICE_ID", False) or "",
+        "elevenlabs": bool(secret("ELEVENLABS_API_KEY", False)), "voice_id": accounts.voice_id(),
         "pexels": bool(secret("PEXELS_API_KEY", False)),
         "channel": safe(youtube.channel) if youtube.connected() else None,
     }
@@ -219,7 +224,62 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
-    def do_GET(self):  # noqa: C901
+    # ---- auth: every API call runs as the signed-in channel account
+    def _session(self) -> str | None:
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "cf_s" and v in SESSIONS:
+                return SESSIONS[v]
+        return None
+
+    def _route(self, inner):
+        path = urlparse(self.path).path
+        acc = self._session()
+        public = path in ("/", "/index.html", "/api/accounts", "/api/login", "/api/logout") or (path.startswith("/oauth/") and "/callback" in path)
+        if acc:
+            try:
+                accounts.get(acc)
+            except KeyError:
+                acc = None
+        if not acc and not public:
+            return self._json({"error": "sign in first", "auth": True}, 401)
+        tok = ACTIVE.set(acc) if acc else None
+        try:
+            if path == "/api/accounts" and self.command == "GET":
+                return self._json({"accounts": [accounts.public(a) for a in accounts.all_accounts()], "me": acc})
+            if path == "/api/login" and self.command == "POST":
+                b = self._body()
+                a = accounts.get(b["id"])
+                if not accounts.check_password(a, b.get("password", "")):
+                    return self._json({"error": "wrong password"}, 403)
+                t = uuid.uuid4().hex
+                SESSIONS[t] = a["id"]
+                return self._send(json.dumps({"ok": True}).encode(), "application/json", 200,
+                                  {"Set-Cookie": f"cf_s={t}; Path=/; HttpOnly; SameSite=Lax"})
+            if path == "/api/logout":
+                return self._send(b'{"ok": true}', "application/json", 200, {"Set-Cookie": "cf_s=; Path=/; Max-Age=0"})
+            if path == "/api/accounts" and self.command == "POST":
+                b = self._body()
+                name = (b.get("name") or "").strip()
+                if not name:
+                    return self._json({"error": "name it"}, 400)
+                style = b.get("style") if b.get("style") in accounts.PERSONAS else "default"
+                a = accounts.create(name, handle=b.get("handle", "").strip(), persona=b.get("persona") or accounts.PERSONAS[style],
+                                    brand={"colors": accounts.BRANDS.get(style, {}).get("colors", {})} if style in accounts.BRANDS else {},
+                                    voice_id=accounts.voice_id(), password=b.get("password", ""))
+                return self._json(accounts.public(a))
+            return inner()
+        finally:
+            if tok is not None:
+                ACTIVE.reset(tok)
+
+    def do_GET(self):
+        self._route(self._get)
+
+    def do_POST(self):
+        self._route(self._post)
+
+    def _get(self):  # noqa: C901
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         path = u.path
@@ -239,6 +299,21 @@ class Handler(BaseHTTPRequestHandler):
                                    "platforms": settings().get("publish", {}).get("platforms", ["youtube", "tiktok"])})
             if path == "/api/connections":
                 return self._json(connections())
+            if path == "/api/me":
+                from .config import brand
+
+                return self._json(accounts.public(accounts.current()) | {"brand_resolved": brand()})
+            if path == "/api/voices":
+                acct = voice_lab.account_voices()
+                ids = {v["id"] for v in acct}
+                picks = [{"id": i, "name": n, "desc": d, "pick": True, "sample": voice_lab.sample_path(i).exists()} for i, n, d in voice_lab.PICKS if i in ids]
+                rest = [v | {"pick": False, "sample": voice_lab.sample_path(v["id"]).exists()} for v in acct if v["id"] not in {p["id"] for p in picks}]
+                return self._json({"current": accounts.voice_id(), "voices": picks + rest})
+            if path.startswith("/sample/") and path.endswith(".mp3"):
+                vid = path[len("/sample/"):-4]
+                if not vid.isalnum():
+                    return self._json({"error": "bad id"}, 400)
+                return self._send(voice_lab.make_sample(vid).read_bytes(), "audio/mpeg")
             if path.startswith("/api/job/"):
                 return self._json({"log": JOBS.log(path.split("/")[3])})
             if path == "/api/defaults":
@@ -249,15 +324,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(ads.candidates())
             if path == "/oauth/youtube/start":
                 url, state = youtube.auth_url(connections()["youtube"]["redirect"])
-                OAUTH[state] = {"platform": "youtube"}
+                OAUTH[state] = {"platform": "youtube", "account": accounts.current_id()}
                 return self._redirect(url)
             if path == "/oauth/tiktok/start":
                 url, state, verifier = tiktok.auth_url(connections()["tiktok"]["redirect"])
-                OAUTH[state] = {"platform": "tiktok", "verifier": verifier}
+                OAUTH[state] = {"platform": "tiktok", "verifier": verifier, "account": accounts.current_id()}
                 return self._redirect(url)
             if path.startswith("/oauth/") and path.rstrip("/").endswith("/callback"):
                 plat = path.split("/")[2]
                 st = OAUTH.pop(q.get("state", ""), None)
+                if st:
+                    ACTIVE.set(st["account"])  # the callback may arrive on another origin without our cookie
                 if q.get("error") or not st or st["platform"] != plat:
                     return self._redirect(f"/#connect?err={q.get('error_description') or q.get('error') or 'state mismatch, try again'}")
                 if plat == "youtube":
@@ -272,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # noqa: BLE001
             return self._json({"error": str(e)}, 500)
 
-    def do_POST(self):  # noqa: C901
+    def _post(self):  # noqa: C901
         path = urlparse(self.path).path
         try:
             if path == "/api/upload":  # drop a source video into inbox/
@@ -300,7 +377,23 @@ class Handler(BaseHTTPRequestHandler):
                 scope = "script" if b.get("scope") == "script" else "visuals"
                 job = JOBS.add(f"Regenerate {b['id']} ({scope})", ["revise", b["id"], "--notes", b.get("notes") or "Make it better.", "--scope", scope])
                 return self._json(job)
+            if path == "/api/revoice":
+                return self._json(JOBS.add(f"Re-voice {b['id']}", ["redo", b["id"], "--revoice", "--no-open"]))
+            if path == "/api/account":
+                allowed = {k: b[k] for k in ("name", "handle", "persona", "slots", "password") if k in b}
+                if "colors" in b:
+                    allowed["brand"] = {"colors": {k: v for k, v in b["colors"].items() if re.fullmatch(r"#[0-9A-Fa-f]{6}", str(v))}}
+                if "voice_id" in b:
+                    if not str(b["voice_id"]).isalnum():
+                        return self._json({"error": "bad voice id"}, 400)
+                    allowed["voice"] = {"voice_id": b["voice_id"]}
+                if "slots" in allowed:
+                    allowed["slots"] = [s for s in allowed["slots"] if re.fullmatch(r"[0-2]\d:[0-5]\d", s)] or accounts.DEFAULT_SLOTS
+                return self._json(accounts.public(accounts.update(accounts.current_id(), **allowed)))
             if path == "/api/approve":
+                s = next((x for x in shorts_state() if x["id"] == b.get("id")), None)
+                if s and s["status"] == "preview":
+                    return self._json({"error": "This short has the preview voice. Re-voice it before scheduling."}, 400)
                 publisher.approve(b["id"], b["slot"], b.get("targets") or {})
                 threading.Thread(target=publisher.tick, daemon=True).start()  # YouTube uploads start right away
                 return self._json({"ok": True})

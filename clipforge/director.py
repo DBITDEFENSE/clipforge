@@ -26,7 +26,14 @@ def direct(script: Script, words: list[Word], short_id: str, notes: str = "") ->
             f"Total length: {words[-1].end_ms / 1000:.1f}s")
     if notes.strip():
         user += f"\n\nNOTES FROM THE HOST on the last cut (highest priority, apply them):\n{notes.strip()}"
-    return structured(PROMPT, user, ShotPlan, stage="direct", ref=short_id, effort="high", max_tokens=16000)
+    from .accounts import current
+
+    try:
+        persona = current().get("persona") or ""
+    except Exception:  # noqa: BLE001
+        persona = ""
+    system = PROMPT + ("\n\n## Channel\n" + persona if persona else "")
+    return structured(system, user, ShotPlan, stage="direct", ref=short_id, effort="high", max_tokens=16000)
 
 
 def _props(s: DirectedShot) -> dict:

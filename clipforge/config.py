@@ -36,9 +36,18 @@ def settings() -> dict:
     return _load("settings.yaml")
 
 
-@lru_cache
 def brand() -> dict:
-    return _load("brand.yaml")
+    """config/brand.yaml overlaid with the active account's name, handle and colors."""
+    base = _load("brand.yaml")
+    try:
+        from .accounts import current
+
+        acc = current()
+    except Exception:  # noqa: BLE001  (no DB yet)
+        return base
+    ov = acc.get("brand") or {}
+    return base | {"name": acc["name"], "handle": acc.get("handle") or base.get("handle"),
+                   "colors": base.get("colors", {}) | ov.get("colors", {}), "fonts": base.get("fonts", {}) | ov.get("fonts", {})}
 
 
 @lru_cache

@@ -57,6 +57,17 @@ CREATE TABLE IF NOT EXISTS metrics (
     views INTEGER, likes INTEGER, comments INTEGER, shares INTEGER,
     PRIMARY KEY (short_id, platform, ts)
 );
+CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    handle TEXT,
+    persona TEXT,
+    brand TEXT,                               -- JSON overrides of config/brand.yaml (colors, fonts)
+    voice TEXT,                               -- JSON {voice_id, ...}
+    slots TEXT,                               -- JSON ["09:00", ...] in plan.timezone
+    password_hash TEXT,
+    created REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ads (
     short_id TEXT PRIMARY KEY,
     status TEXT NOT NULL,                     -- candidate | boosted | dismissed
@@ -69,6 +80,9 @@ MIGRATIONS = [
     "ALTER TABLE shorts ADD COLUMN review TEXT NOT NULL DEFAULT 'pending'",   # pending | approved | rejected
     "ALTER TABLE shorts ADD COLUMN slot TEXT",   # ISO post time (America/New_York)
     "ALTER TABLE shorts ADD COLUMN notes TEXT",
+    "ALTER TABLE shorts ADD COLUMN account TEXT NOT NULL DEFAULT 'dbit-defense'",
+    "ALTER TABLE videos ADD COLUMN account TEXT NOT NULL DEFAULT 'dbit-defense'",
+    "ALTER TABLE stories ADD COLUMN account TEXT NOT NULL DEFAULT 'dbit-defense'",
 ]
 
 
@@ -88,6 +102,12 @@ def connect():
         con.commit()
     finally:
         con.close()
+
+
+def _acct() -> str:
+    from .accounts import current_id  # lazy: accounts imports db
+
+    return current_id()
 
 
 def video_known(h: str) -> sqlite3.Row | None:
@@ -126,9 +146,9 @@ def upsert_short(short_id: str, story_id: str, batch_id: str, status: str, **fie
     now = time.time()
     with connect() as con:
         con.execute(
-            "INSERT INTO shorts(id,story_id,batch_id,status,created,updated) VALUES(?,?,?,?,?,?) "
+            "INSERT INTO shorts(id,story_id,batch_id,status,created,updated,account) VALUES(?,?,?,?,?,?,?) "
             "ON CONFLICT(id) DO UPDATE SET status=excluded.status, updated=excluded.updated",
-            (short_id, story_id, batch_id, status, now, now),
+            (short_id, story_id, batch_id, status, now, now, _acct()),
         )
         for k, v in fields.items():
             if k not in {"out_dir", "qa", "error"}:

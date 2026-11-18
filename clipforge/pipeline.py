@@ -82,12 +82,22 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
     out = OUT / date / short_id
     try:
         db.upsert_short(short_id, short_id, batch_id, "voicing")
+        vmeta = work / "voice.json"
         if reuse_voice and (work / "words.json").exists() and (work / "vo.mp3").exists():
             console.print(f"[cyan]voice[/] {short_id}: reusing existing take")
             words = [Word(**w) for w in json.loads((work / "words.json").read_text(encoding="utf-8"))]
+            preview = json.loads(vmeta.read_text(encoding="utf-8")).get("preview", False) if vmeta.exists() else False
         else:
             console.print(f"[cyan]voice[/] {short_id}: {script.title}")
-            words = voice.synthesize(script, short_id, work, voice_provider)
+            preview = False
+            try:
+                words = voice.synthesize(script, short_id, work, voice_provider)
+            except RuntimeError as e:
+                if "quota" not in str(e).lower() and "ElevenLabs 401" not in str(e) and "ElevenLabs 429" not in str(e):
+                    raise
+                console.print("[yellow]ElevenLabs is out of credits: rendering with the PREVIEW voice (re-voice before posting)[/]")
+                words, preview = voice.synthesize(script, short_id, work, "say"), True
+            vmeta.write_text(json.dumps({"provider": "say" if preview else (voice_provider or settings()["voice"]["provider"]), "preview": preview}), encoding="utf-8")
 
         if keep_shots and (work / "shots.json").exists():
             console.print(f"[cyan]shots[/] {short_id}: reusing existing shot plan")
@@ -127,7 +137,12 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
         (out / "sources.txt").write_text(src_txt, encoding="utf-8")
         (out / "qa.json").write_text(json.dumps(report | {"finish": fin}, indent=2), encoding="utf-8")
 
-        status = "done" if report["passed"] else "flagged"
+        from . import originality
+
+        report["originality"] = originality.for_story(script.spoken_text(), story)
+        report["voice_preview"] = preview
+        (out / "qa.json").write_text(json.dumps(report | {"finish": fin}, indent=2), encoding="utf-8")
+        status = ("preview" if preview else "done") if report["passed"] else "flagged"
         db.upsert_short(short_id, short_id, batch_id, status, out_dir=str(out), qa=report)
         _clean_old_outputs(short_id, out)
         return {"id": short_id, "status": status, "out": str(out), "title": script.title}

@@ -8,7 +8,9 @@ Long-form videos in, original vertical shorts out. The uploads are **research in
 uv run clipforge studio
 ```
 
-One local app (http://127.0.0.1:8790) for the whole flow:
+One local app (http://127.0.0.1:8790) for the whole flow. You sign in to a **channel account** first; every channel
+(e.g. Cyber Cowboy, DBIT Defense) has its own persona, colors, handle, voice, posting times, connected YouTube/TikTok and
+optional password. Home shows what to do next.
 
 1. **Create**: paste links or drop video files. Jobs run one at a time with a live log.
 2. **Review**: watch each short, then **Approve** (pick a slot, YouTube and/or TikTok), **Regenerate** with notes (visuals only, or script + voice), or **Reject**.
@@ -20,7 +22,14 @@ How posting works:
 - **YouTube** uploads right after you approve, as private with `publishAt`, so YouTube publishes it on time even if the studio is closed.
 - **TikTok** has no scheduling API, so the studio posts at the slot time **while it's running** (or run `clipforge publish-due` from Task Scheduler). The approve dialog follows TikTok's required posting UX (account shown, privacy with no default, interaction toggles, commercial disclosure, consent line). Until TikTok audits your app, posts are private-only.
 
+- **Preview voice**: if ElevenLabs is out of credits, shorts render with a robotic placeholder voice and are marked
+  "Preview voice". They can't be scheduled until you hit **Re-voice** (after topping up).
+- **Originality check**: every short reports how much wording overlaps the source transcripts (7+ word runs). Informational, never blocks.
+- **Feedback loop**: once posts have stats, the writer sees which hooks/topics did best and worst on that channel.
+
 ## CLI
+
+All commands take `--account <id>` (`clipforge channels` lists them), e.g. `clipforge --account cyber-cowboy add <url> --run`.
 
 ```powershell
 uv run clipforge add URL1 URL2 URL3 --run   # download a batch and make the shorts (or drop files in inbox/ and `clipforge run`)

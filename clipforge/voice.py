@@ -89,7 +89,9 @@ def _to_words(raw: list[dict]) -> list[Word]:
 
 def _elevenlabs(text: str, out_mp3: Path) -> dict:
     cfg = settings()["voice"]
-    voice_id = secret("ELEVENLABS_VOICE_ID")
+    from .accounts import voice_id as _vid
+
+    voice_id = _vid() or secret("ELEVENLABS_VOICE_ID")
     r = httpx.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps",
         params={"output_format": cfg["output_format"]},

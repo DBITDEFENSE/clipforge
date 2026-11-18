@@ -20,14 +20,22 @@ def now() -> dt.datetime:
     return dt.datetime.now(tz())
 
 
+def _acct() -> str:
+    from .accounts import current_id
+
+    return current_id()
+
+
 def slot_times() -> list[dt.time]:
-    raw = settings()["plan"].get("slots") or ["09:00", "12:00", "15:00", "18:00", "21:00"]
+    from .accounts import current
+
+    raw = current().get("slots") or settings()["plan"].get("slots") or ["09:00", "12:00", "15:00", "18:00", "21:00"]
     return sorted(dt.time.fromisoformat(t) for t in raw)
 
 
 def taken() -> set[str]:
     with db.connect() as con:
-        return {r["slot"] for r in con.execute("SELECT slot FROM shorts WHERE review='approved' AND slot IS NOT NULL")}
+        return {r["slot"] for r in con.execute("SELECT slot FROM shorts WHERE review='approved' AND slot IS NOT NULL AND account=?", (_acct(),))}
 
 
 def next_free(after: dt.datetime | None = None, exclude: set[str] | None = None) -> dt.datetime:
@@ -46,7 +54,7 @@ def next_free(after: dt.datetime | None = None, exclude: set[str] | None = None)
 def upcoming(days: int = 7) -> list[dict]:
     """Every slot for the next N days with what's in it."""
     with db.connect() as con:
-        rows = {r["slot"]: r["id"] for r in con.execute("SELECT id, slot FROM shorts WHERE review='approved' AND slot IS NOT NULL")}
+        rows = {r["slot"]: r["id"] for r in con.execute("SELECT id, slot FROM shorts WHERE review='approved' AND slot IS NOT NULL AND account=?", (_acct(),))}
     out, start = [], now().date()
     for d in range(days):
         day = start + dt.timedelta(days=d)
@@ -64,10 +72,10 @@ def title_of(short_id: str) -> str:
 def write_queue() -> None:
     """out/queue.csv: every approved short in posting order with per-platform status (times in America/New_York)."""
     with db.connect() as con:
-        shorts = con.execute("SELECT id, slot, out_dir FROM shorts WHERE review='approved' AND slot IS NOT NULL ORDER BY slot").fetchall()
+        shorts = con.execute("SELECT id, slot, out_dir FROM shorts WHERE review='approved' AND slot IS NOT NULL AND account=? ORDER BY slot", (_acct(),)).fetchall()
         posts = {(r["short_id"], r["platform"]): r for r in con.execute("SELECT * FROM posts")}
     OUT.mkdir(parents=True, exist_ok=True)
-    with open(OUT / "queue.csv", "w", newline="", encoding="utf-8") as f:
+    with open(OUT / f"queue-{_acct()}.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["post_time_et", "short_id", "title", "file", "youtube", "youtube_url", "tiktok", "tiktok_url"])
         for s in shorts:

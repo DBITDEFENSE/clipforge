@@ -58,7 +58,7 @@ def test_future_slot_youtube_uploads_now_tiktok_waits(env):
     p = publisher.posts_for("s1")
     assert env["yt"] and p["youtube"]["status"] == "scheduled"      # uploaded with publishAt
     assert not env["tt"] and p["tiktok"]["status"] == "queued"      # not due yet
-    assert "YT title" not in (schedule.OUT / "queue.csv").read_text() and "scheduled" in (schedule.OUT / "queue.csv").read_text()
+    assert "YT title" not in (schedule.OUT / "queue-dbit-defense.csv").read_text() and "scheduled" in (schedule.OUT / "queue-dbit-defense.csv").read_text()
 
 
 def test_due_tiktok_posts_then_goes_live(env):
