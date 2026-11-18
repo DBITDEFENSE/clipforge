@@ -1,6 +1,6 @@
 import React from 'react';
 import {Easing, interpolate, spring, useVideoConfig} from 'remotion';
-import {DISPLAY} from '../fonts';
+import {DISPLAY, palette} from '../fonts';
 import type {Brand, Layout} from '../types';
 
 /** Splits "$4.2M" -> {prefix:"$", num:4.2, decimals:1, suffix:"M", commas:false} so it can count up. */
@@ -27,7 +27,7 @@ export const StatCard: React.FC<{props: Record<string, any>; elapsed: number; br
   const size = Math.max(200, Math.min(330, 1500 / Math.max(String(props.value).length, 3)));
   return (
     <div style={{position: 'absolute', left: 60, right: 60, top: layout.content_top, height: layout.content_bottom - layout.content_top, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
-      <div style={{fontFamily: DISPLAY, fontWeight: 900, fontSize: size, lineHeight: 1, color: c.accent, letterSpacing: '-0.04em', textShadow: `0 0 60px ${c.accent}55`, transform: `scale(${interpolate(s, [0, 1], [0.7, 1])})`, fontVariantNumeric: 'tabular-nums'}}>
+      <div style={{fontFamily: DISPLAY, fontWeight: 900, fontSize: size, lineHeight: 1, color: palette(c).highlight, letterSpacing: '-0.04em', textShadow: `0 0 70px ${palette(c).highlight}55`, transform: `scale(${interpolate(s, [0, 1], [0.7, 1])})`, fontVariantNumeric: 'tabular-nums'}}>
         {text}
       </div>
       <div style={{marginTop: 28, fontFamily: DISPLAY, fontWeight: 800, fontSize: 64, textTransform: 'uppercase', letterSpacing: '0.02em', color: c.text, textAlign: 'center', opacity: interpolate(elapsed, [10, 20], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'})}}>

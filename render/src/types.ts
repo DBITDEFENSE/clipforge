@@ -1,11 +1,12 @@
 // Mirrors clipforge/shots.schema.json (validated in Python before every render).
 export type Motion = 'pop' | 'punch_in' | 'drift' | 'none';
-export type ShotType = 'kinetic' | 'code' | 'terminal' | 'headline' | 'stat' | 'diagram' | 'cve' | 'broll';
+export type ShotType = 'kinetic' | 'code' | 'terminal' | 'headline' | 'stat' | 'diagram' | 'cve' | 'broll' | 'reaction' | 'popups';
+export type FX = 'none' | 'fire' | 'alarm' | 'glitch' | 'shake' | 'emoji_rain';
 
 export interface Brand {
   name: string;
   handle?: string;
-  colors: {bg: string; surface: string; text: string; muted: string; accent: string; warning: string};
+  colors: {bg: string; surface: string; text: string; muted: string; accent: string; warning: string; accent2?: string; highlight?: string; fire?: string};
   fonts: {display: string; mono: string};
 }
 

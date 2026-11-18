@@ -21,13 +21,21 @@ console = Console()
 
 
 @app.command()
-def add(urls: list[str] = typer.Argument(..., help="YouTube / X / any yt-dlp supported links")):
-    """Download links into inbox/."""
+def add(
+    urls: list[str] = typer.Argument(..., help="YouTube / X / any yt-dlp supported links (as many as you want)"),
+    go: bool = typer.Option(False, "--run", help="Process everything right after downloading"),
+):
+    """Download links into inbox/. With --run, make the shorts too."""
     ensure_dirs()
     for u in urls:
         console.print(f"[cyan]download[/] {u}")
-        p = ingest.download(u)
-        console.print(f"  -> {p.name}")
+        try:
+            p = ingest.download(u)
+            console.print(f"  -> {p.name}")
+        except Exception as e:  # one bad link shouldn't sink the batch
+            console.print(f"  [red]failed[/]: {e}")
+    if go:
+        run(None, None, None)
 
 
 @app.command()
@@ -74,6 +82,7 @@ def make(
 def redo(
     short_ids: list[str] = typer.Argument(..., help="Short IDs to re-direct and re-render (voice is reused, no TTS cost)"),
     keep_shots: bool = typer.Option(False, "--keep-shots", help="Reuse the existing shot plan too (render-only, no Claude calls)"),
+    revoice: bool = typer.Option(False, "--revoice", help="Re-synthesize the voice with the current voice/settings (uses TTS credits)"),
 ):
     """Re-run shots -> render -> finish -> QA for existing shorts, keeping their script and voice."""
     from .config import WORK
@@ -88,7 +97,7 @@ def redo(
             topic=script.title, cluster="manual", category="cyber", key_facts=[], angle="", who_affected="", how_it_works="",
             sources=[], scores={"hook": 0, "clarity": 0, "curiosity": 0, "niche_fit": 0})
         results.append(pipeline.produce(sid, row["batch_id"] if row else "manual", story, script, (row["day"] or 0) if row else 0,
-                                        reuse_voice=True, keep_shots=keep_shots))
+                                        reuse_voice=not revoice, keep_shots=keep_shots and not revoice))
     _summary(results, time.time() - t)
     gallery(True)
 
@@ -97,6 +106,14 @@ def redo(
 def setup(port: int = typer.Option(8788)):
     """Open a local page to paste API keys (validated, saved to .env)."""
     from .setup_page import serve
+
+    serve(port)
+
+
+@app.command()
+def voices(port: int = typer.Option(8789)):
+    """Audition voices on a real line, pick one, or clone your own."""
+    from .voice_lab import serve
 
     serve(port)
 

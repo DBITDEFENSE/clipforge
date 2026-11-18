@@ -5,9 +5,9 @@ Long-form videos in, original vertical shorts out. The uploads are **research in
 ## Daily use
 
 ```powershell
-uv run clipforge add https://www.youtube.com/watch?v=...   # or drop files in inbox/
-uv run clipforge run                                       # transcribe -> mine -> write -> voice -> render -> QA
-uv run clipforge status                                    # what happened
+uv run clipforge add URL1 URL2 URL3 --run   # download a batch and make the shorts (or drop files in inbox/ and `clipforge run`)
+uv run clipforge gallery                    # watch everything, copy captions
+uv run clipforge status                     # what happened
 ```
 
 Each short lands in `out/<post-date>/<short_id>/`:
@@ -22,6 +22,8 @@ Each short lands in `out/<post-date>/<short_id>/`:
 | `sources.txt` | which uploads/timestamps it drew from |
 | `qa.json` | automatic QA results |
 
+A batch makes `max(per_day * days, per_video * videos)` shorts (settings.yaml `plan`): every video contributes its best `per_video` stories, the same event covered by two videos is merged into one short, and post dates are spread at `per_day` per day.
+
 Shorts that fail QA twice are marked `flagged` (not `done`). The batch never stops for one bad video.
 
 ## Setup (once)
@@ -33,6 +35,9 @@ Shorts that fail QA twice are marked `flagged` (not `done`). The batch never sto
 
 ## Other commands
 
+- `clipforge voices`: audition voices on the same line, click "Use this", or upload 1-3 minutes of yourself to clone your voice.
+- `clipforge redo <ids...> [--keep-shots | --revoice]`: re-direct and re-render existing shorts (voice reused); `--keep-shots` is render-only, `--revoice` re-synthesizes with the current voice.
+
 - `clipforge make <script.json> [--voice say|take|elevenlabs]`: produce one short from a script file. Useful for re-renders after you edit a script.
 - Voice `take`: record yourself reading the script, save it as `takes/<short_id>.wav`, then run `make ... --voice take`. WhisperX aligns your take to the script.
 - `cd render && npm run studio`: live-preview the Remotion components.
@@ -40,7 +45,9 @@ Shorts that fail QA twice are marked `flagged` (not `done`). The batch never sto
 ## Tuning
 
 - `config/settings.yaml`: models, posts per day, voice settings, loudness, shot pacing.
-- `config/brand.yaml`: colors, fonts, handle.
+- `config/brand.yaml`: colors (cyan accent, pink accent2, lime highlight, warning, fire), fonts, handle.
+- `assets/sfx/`: cut and reaction sound effects (synthesized originals). Drop your own `whoosh.wav`, `boom.mp3`, ... to replace any of them.
+- Shot types the director can use: kinetic, headline, stat, code, terminal, diagram, cve, broll, **reaction** (meme beat: giant emoji + punchline), **popups** (cascading alert windows). Any shot can add an `fx` (fire, alarm, glitch, shake, emoji_rain), a corner emoji sticker, and a sound effect.
 - `config/pronunciations.yaml`: how the voice says CVE IDs and acronyms. Captions keep the original spelling.
 - `clipforge/prompts/*.md`: the editorial voice (mining and writing prompts).
 

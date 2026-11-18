@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import broll
+from . import broll, sfx
 from .config import settings
 from .llm import structured
 from .schemas import DirectedShot, Script, ShotPlan, Word
@@ -12,7 +12,7 @@ from .shots import CARD_TYPES, base_doc, validate
 from .timing import W, beat_word_ranges, ms_to_frame, split_beat
 
 PROMPT = (Path(__file__).parent / "prompts" / "direct.md").read_text(encoding="utf-8")
-ALL_CARDS = CARD_TYPES | {"diagram", "cve"}
+ALL_CARDS = CARD_TYPES | {"diagram", "cve", "reaction", "popups"}
 MOTIONS = ["pop", "punch_in", "drift"]
 
 
@@ -44,6 +44,10 @@ def _props(s: DirectedShot) -> dict:
     if t == "cve":
         sev = s.kicker.upper() if s.kicker.upper() in {"LOW", "MEDIUM", "HIGH", "CRITICAL"} else ""
         return {"cve_id": s.value, "cvss": s.score if s.score > 0 else None, "severity": sev, "product": s.label}
+    if t == "reaction":
+        return {"emoji": s.emoji.strip(), "text": s.text, "kicker": s.kicker}
+    if t == "popups":
+        return {"lines": [m for m in s.lines if m.strip()][:5], "title": s.kicker or "ALERT"}
     return {}
 
 
@@ -53,6 +57,7 @@ def _usable(s: DirectedShot) -> bool:
         "kinetic": bool(p.get("text")), "headline": bool(p.get("headline")), "stat": bool(p.get("value")),
         "code": bool(p.get("lines")), "terminal": bool(p.get("lines")), "diagram": len(p.get("nodes", [])) >= 2,
         "cve": bool(p.get("cve_id")), "broll": bool(s.broll_query),
+        "reaction": bool(p.get("emoji")), "popups": bool(p.get("lines")),
     }[s.type]
 
 
@@ -134,6 +139,16 @@ def to_doc(plan: ShotPlan, script: Script, words: list[Word], short_id: str, wor
             props["anim_start_frame"] = card_start[key]
         if s.lower_title and sub == 0:
             props["lower"] = {"title": s.lower_title, "sub": s.lower_sub or ""}
+        if sub == 0:  # effects, stickers and sound hit on the shot's first cut only
+            if s.fx != "none":
+                props["fx"] = s.fx
+                if s.fx == "alarm" and s.kicker and typ not in {"headline", "cve", "popups", "reaction"}:
+                    props["alert_text"] = s.kicker
+            if s.emoji.strip() and typ != "reaction":
+                props["emoji"] = s.emoji.strip()
+            src = sfx.file_for(s.sfx) if s.sfx != "none" else None
+            if src:
+                props["sfx_src"], props["sfx_volume"] = src, sfx.VOLUME.get(s.sfx, 0.4)
         motion = s.motion if sub == 0 else MOTIONS[(MOTIONS.index(s.motion) + sub) % 3 if s.motion in MOTIONS else sub % 3]
         shots.append({"id": f"s{len(shots):02d}", "type": typ, "beat": beat_of(wi), "start_frame": sf, "end_frame": ef,
                       "motion": motion, "props": props})

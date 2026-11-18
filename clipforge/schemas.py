@@ -103,7 +103,9 @@ class Review(BaseModel):
 
 
 # ---------- director (Claude-authored shots) ----------
-ShotKind = Literal["kinetic", "headline", "stat", "code", "terminal", "diagram", "cve", "broll"]
+ShotKind = Literal["kinetic", "headline", "stat", "code", "terminal", "diagram", "cve", "broll", "reaction", "popups"]
+FxKind = Literal["none", "fire", "alarm", "glitch", "shake", "emoji_rain"]
+SfxKind = Literal["none", "whoosh", "boom", "ding", "alarm", "glitch", "pop", "cash", "riser"]
 MotionKind = Literal["pop", "punch_in", "drift", "none"]
 
 
@@ -113,17 +115,20 @@ class DirectedShot(BaseModel):
     type: ShotKind
     motion: MotionKind
     card_key: str = Field(description="Shots sharing a non-empty card_key continue the same card animation; '' if none")
-    text: str = Field(description="kinetic: <= 5 words, *wrap* accent word(s). headline: the <= 9 word headline. broll: optional <= 4 word overlay. Else ''")
-    kicker: str = Field(description="headline: short tag line (e.g. 'CVE-2025-1234 · CVSS 9.8'). cve: severity LOW/MEDIUM/HIGH/CRITICAL. Else ''")
+    text: str = Field(description="kinetic: <= 5 words, *wrap* accent word(s). headline: the <= 9 word headline. reaction: the <= 7 word punchline. broll: optional <= 4 word overlay. Else ''")
+    kicker: str = Field(description="headline: short tag line. cve: severity LOW/MEDIUM/HIGH/CRITICAL. reaction: optional meme top line ('NOBODY:', 'POV:'). popups: window title. alarm fx: <= 3 word alert strip text. Else ''")
     value: str = Field(description="stat: the number as shown ('38,490', '$6.3B'). cve: the CVE ID. Else ''")
     label: str = Field(description="stat: what it counts (<= 6 words). cve: affected product. diagram: what travels the arrows (<= 4 words). Else ''")
     score: float = Field(description="cve: CVSS 0-10. Else 0")
-    lines: list[str] = Field(description="code: 3-9 illustrative lines. terminal: 3-8 lines, commands prefixed '$ '. diagram: 2-4 node labels in flow order. Else []")
+    lines: list[str] = Field(description="code: 3-9 illustrative lines. terminal: 3-8 lines, commands prefixed '$ '. diagram: 2-4 node labels in flow order. popups: 2-5 short alert messages (<= 4 words each). Else []")
     code_language: str = Field(description="code: language label (python, bash, http, yaml). Else ''")
     highlight: int = Field(description="code: 1-based line to highlight, 0 for none. diagram: 0-based index of the compromised node, -1 for none")
     broll_query: str = Field(description="broll: 2-4 word filmable stock search ('server room lights'). Else ''")
     lower_title: str = Field(description="Optional lower-third title (vendor, actor, source), <= 4 words; '' for none")
     lower_sub: str = Field(description="Lower-third subtitle, <= 6 words; '' for none")
+    emoji: str = Field(description="reaction: the one big emoji (required). Other shots: optional corner sticker emoji. emoji_rain fx: the emoji that rains. '' for none")
+    fx: FxKind = Field(description="Overlay effect for this shot, or 'none'")
+    sfx: SfxKind = Field(description="Sound effect on this shot's first frame, or 'none'")
 
 
 class ShotPlan(BaseModel):

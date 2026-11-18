@@ -19,6 +19,10 @@ def _remotion(args: list[str], public_dir: Path) -> None:
 
 
 def render_video(shots_path: Path, workdir: Path) -> Path:
+    from . import sfx
+
+    doc = json.loads(shots_path.read_text(encoding="utf-8"))
+    sfx.stage({Path(s["props"]["sfx_src"]).stem for s in doc["shots"] if s["props"].get("sfx_src")}, workdir)
     out = workdir / "render.mp4"
     crf = settings()["finish"]["crf"]
     _remotion(["render", "src/index.ts", "Short", str(out), f"--props={shots_path}", "--codec=h264",

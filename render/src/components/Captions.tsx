@@ -1,6 +1,6 @@
 import React from 'react';
 import {interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
-import {DISPLAY} from '../fonts';
+import {DISPLAY, palette} from '../fonts';
 import type {Brand, Caption, Layout} from '../types';
 
 /** Word-by-word captions: 1-3 words at a time, active word highlighted, inside the safe caption band. */
@@ -29,11 +29,11 @@ export const Captions: React.FC<{captions: Caption[]; brand: Brand; layout: Layo
             key={i}
             style={{
               fontFamily: DISPLAY, fontWeight: 900, fontSize: size, lineHeight: 1.05, textTransform: 'uppercase', letterSpacing: '-0.01em',
-              color: active ? brand.colors.accent : brand.colors.text,
+              color: active ? palette(brand.colors).highlight : brand.colors.text,
               opacity: spoken ? 1 : 0.55,
               WebkitTextStroke: '10px #000', paintOrder: 'stroke fill',
               textShadow: '0 8px 24px rgba(0,0,0,.7)',
-              transform: active ? 'scale(1.05)' : 'none', transformOrigin: '50% 60%', display: 'inline-block',
+              transform: active ? 'scale(1.08) rotate(-2deg)' : 'none', transformOrigin: '50% 60%', display: 'inline-block',
             }}
           >
             {w.text}

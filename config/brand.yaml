@@ -2,14 +2,18 @@
 name: DBIT Defense
 handle: "@dbitdefense"
 colors:
-  bg: "#0A0B0D"          # near-black base
-  surface: "#14161A"
-  text: "#F2F4F7"
-  muted: "#8A93A0"
-  accent: "#00E0FF"      # single accent (cyan)
-  warning: "#FF4D3D"     # single warning color
+  bg: "#06070B"          # deep blue-black base
+  surface: "#11131A"     # cards
+  text: "#FFFFFF"
+  muted: "#8B93A7"
+  accent: "#00E5FF"      # electric cyan: cards, borders, progress
+  accent2: "#FF2D87"     # hot pink: kinetic accent words, bursts, meme moments
+  highlight: "#E8FF3A"   # acid lime: active caption word, big numbers
+  warning: "#FF3B30"     # danger / compromised / alerts
+  fire: "#FF8A00"        # flames + heat glow
 fonts:
   display: Archivo       # captions, headlines, kinetic text (800/900)
+  meme: Anton            # reaction/meme captions
   mono: JetBrains Mono   # code + terminal
 # Later phases: logo, intro sting, end card
 logo: null

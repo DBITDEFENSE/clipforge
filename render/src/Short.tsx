@@ -12,7 +12,10 @@ import {KineticText} from './components/KineticText';
 import {Motion} from './components/Motion';
 import {StatCard} from './components/StatCard';
 import {TerminalCard} from './components/TerminalCard';
-import {MONO} from './fonts';
+import {Alarm, EmojiRain, Fire, Glitch, Shake, Sticker} from './components/FX';
+import {Popups} from './components/Popups';
+import {Reaction} from './components/Reaction';
+import {MONO, palette} from './fonts';
 import type {Shot, ShotsDoc} from './types';
 
 const ShotView: React.FC<{shot: Shot; doc: ShotsDoc}> = ({shot, doc}) => {
@@ -30,13 +33,26 @@ const ShotView: React.FC<{shot: Shot; doc: ShotsDoc}> = ({shot, doc}) => {
     case 'stat': body = <StatCard {...common} />; break;
     case 'diagram': body = <DiagramFlow {...common} />; break;
     case 'cve': body = <CVEScoreCard {...common} />; break;
+    case 'reaction': body = <Reaction {...common} />; break;
+    case 'popups': body = <Popups {...common} />; break;
     case 'broll': body = <BRoll props={shot.props} duration={shot.end_frame - shot.start_frame} brand={brand} layout={layout} />; break;
   }
   const lower = shot.props.lower;
+  const fx: string = shot.props.fx ?? 'none';
+  const emoji: string = shot.props.emoji ?? '';
+  let moved: React.ReactNode = <Motion motion={shot.type === 'broll' ? 'none' : shot.motion} duration={shot.end_frame - shot.start_frame}>{body}</Motion>;
+  if (fx === 'glitch') moved = <Glitch>{moved}</Glitch>;
+  if (fx === 'shake') moved = <Shake>{moved}</Shake>;
+  const side = parseInt(shot.id.replace(/\D/g, '') || '0', 10) % 2 ? 'left' : 'right';
   return (
     <>
-      <Motion motion={shot.type === 'broll' ? 'none' : shot.motion} duration={shot.end_frame - shot.start_frame}>{body}</Motion>
+      {fx === 'fire' ? <Fire brand={brand} /> : null}
+      {fx === 'emoji_rain' ? <EmojiRain emoji={emoji} /> : null}
+      {moved}
+      {fx === 'alarm' ? <Alarm brand={brand} layout={layout} text={shot.props.alert_text} /> : null}
+      {emoji && shot.type !== 'reaction' && fx !== 'emoji_rain' && !lower?.title ? <Sticker emoji={emoji} layout={layout} side={side} /> : null}
       {lower?.title ? <LowerThird title={lower.title} sub={lower.sub} brand={brand} layout={layout} /> : null}
+      {shot.props.sfx_src ? <Audio src={staticFile(shot.props.sfx_src)} volume={shot.props.sfx_volume ?? 0.4} /> : null}
     </>
   );
 };
@@ -48,7 +64,7 @@ const Chrome: React.FC<{doc: ShotsDoc}> = ({doc}) => {
   return (
     <>
       <div style={{position: 'absolute', left: 90, right: 90, top: y, height: 6, borderRadius: 3, background: 'rgba(255,255,255,.08)'}}>
-        <div style={{height: '100%', width: `${(frame / doc.duration_frames) * 100}%`, borderRadius: 3, background: c.accent}} />
+        <div style={{height: '100%', width: `${(frame / doc.duration_frames) * 100}%`, borderRadius: 3, background: `linear-gradient(90deg, ${palette(c).accent}, ${palette(c).accent2})`}} />
       </div>
       {doc.brand.handle ? (
         <div style={{position: 'absolute', left: 0, right: 0, top: y + 22, textAlign: 'center', fontFamily: MONO, fontSize: 24, letterSpacing: '0.12em', color: `${c.muted}AA`}}>

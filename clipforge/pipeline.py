@@ -138,7 +138,7 @@ def run(voice_provider: str | None = None) -> list[dict]:
     batch_id = time.strftime("%Y%m%d-%H%M%S")
     console.print(f"[cyan]mine[/] {len(batch)} transcript(s) -> stories (batch {batch_id})")
     stories = mine.mine(batch_id, batch)
-    picks = mine.pick(batch_id, stories)
+    picks = mine.pick(batch_id, stories, len(batch))
     for v in batch:
         db.set_video_status(v["hash"], "mined")
     console.print(f"  {len(stories)} stories found, {len(picks)} picked")

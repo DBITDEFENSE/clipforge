@@ -1,6 +1,6 @@
 import React from 'react';
 import {interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
-import {DISPLAY, parseAccent} from '../fonts';
+import {DISPLAY, palette, parseAccent} from '../fonts';
 import type {Brand, Layout} from '../types';
 
 export const KineticText: React.FC<{text: string; brand: Brand; layout: Layout}> = ({text, brand, layout}) => {
@@ -24,9 +24,10 @@ export const KineticText: React.FC<{text: string; brand: Brand; layout: Layout}>
             key={i}
             style={{
               fontFamily: DISPLAY, fontWeight: 900, fontSize: size, lineHeight: 0.98, textTransform: 'uppercase', letterSpacing: '-0.02em',
-              color: t.accent ? brand.colors.accent : brand.colors.text,
-              textShadow: t.accent ? `0 0 40px ${brand.colors.accent}66` : '0 6px 30px rgba(0,0,0,.6)',
-              opacity: s, transform: `translateY(${y}px) scale(${interpolate(s, [0, 1], [0.82, 1])})`, display: 'inline-block',
+              color: brand.colors.text,
+              textShadow: t.accent ? 'none' : '0 6px 30px rgba(0,0,0,.6)',
+              ...(t.accent ? {background: palette(brand.colors).accent2, padding: `0 ${size * 0.12}px`, borderRadius: size * 0.1, boxShadow: `0 0 50px ${palette(brand.colors).accent2}77`} : {}),
+              opacity: s, transform: `translateY(${y}px) scale(${interpolate(s, [0, 1], [0.82, 1])}) rotate(${t.accent ? (i % 2 ? 2 : -2) : 0}deg)`, display: 'inline-block',
             }}
           >
             {t.text}
