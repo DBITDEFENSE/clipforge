@@ -303,6 +303,31 @@ class Handler(BaseHTTPRequestHandler):
                 from .config import brand
 
                 return self._json(accounts.public(accounts.current()) | {"brand_resolved": brand()})
+            if path == "/api/voices/local":
+                from . import tts_local, voice
+
+                return self._json({"provider": voice.default_provider(), "config": tts_local.clean(voice.local_voice_config()),
+                                   "voices": [{"id": k, "desc": d} for k, d in tts_local.VOICES.items()],
+                                   "drawls": list(tts_local.DRAWL_LEVELS), "presets": tts_local.PRESETS})
+            if path == "/sample-local":
+                import hashlib
+
+                from . import tts_local
+
+                try:
+                    cfg = tts_local.clean(json.loads(q.get("cfg") or "{}"))
+                except (ValueError, json.JSONDecodeError) as e:
+                    return self._json({"error": str(e)}, 400)
+                line = (f"Howdy, partner. This is {accounts.current()['name']}. Microsoft's email was down for thirty six hours, "
+                        "and I'm telling you, the meetings always survive.")
+                cache = DATA / "local_audition" / "cache"
+                cache.mkdir(parents=True, exist_ok=True)
+                key = hashlib.md5((json.dumps(cfg, sort_keys=True) + line).encode()).hexdigest()
+                f = cache / f"{key}.mp3"
+                if not f.exists():
+                    raw = tts_local.synth(line, cache / f"{key}.wav", cfg)
+                    tts_local.finish(raw, f, cfg)
+                return self._send(f.read_bytes(), "audio/mpeg")
             if path == "/api/voices":
                 acct = voice_lab.account_voices()
                 ids = {v["id"] for v in acct}
@@ -386,7 +411,11 @@ class Handler(BaseHTTPRequestHandler):
                 if "voice_id" in b:
                     if not str(b["voice_id"]).isalnum():
                         return self._json({"error": "bad voice id"}, 400)
-                    allowed["voice"] = {"voice_id": b["voice_id"]}
+                    allowed["voice"] = {"voice_id": b["voice_id"], "provider": "elevenlabs"}
+                if "local_voice" in b:
+                    from . import tts_local
+
+                    allowed["voice"] = {"provider": "kokoro"} | tts_local.clean(b["local_voice"])
                 if "slots" in allowed:
                     allowed["slots"] = [s for s in allowed["slots"] if re.fullmatch(r"[0-2]\d:[0-5]\d", s)] or accounts.DEFAULT_SLOTS
                 return self._json(accounts.public(accounts.update(accounts.current_id(), **allowed)))

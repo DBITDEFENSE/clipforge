@@ -44,6 +44,23 @@ def _clean_old_outputs(short_id: str, keep: Path) -> None:
             shutil.rmtree(d, ignore_errors=True)
 
 
+def _add_meme(doc: dict, script: Script, short_id: str, work: Path) -> dict:
+    """AI meme in the first 6 seconds. Never blocks the short."""
+    from . import meme, sfx
+
+    try:
+        spec = meme.write(script, short_id)
+        (work / "meme.json").write_text(spec.model_dump_json(indent=2), encoding="utf-8")
+        props = meme.props(spec) | {"sfx_src": sfx.file_for("boom"), "sfx_volume": sfx.VOLUME["boom"]}
+        new = meme.insert(json.loads(json.dumps(doc)), props, settings()["video"]["fps"])
+        shots.validate(new)
+        console.print(f"[cyan]meme[/] {short_id}: {spec.format} - {spec.why_funny[:80]}")
+        return new
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[yellow]meme skipped ({str(e)[:160]})[/]")
+        return doc
+
+
 def transcribe_pending() -> list[dict]:
     """Transcribe every new inbox video. Returns the batch: [{hash, title, transcript}]."""
     batch = []
@@ -95,9 +112,9 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
             except RuntimeError as e:
                 if "quota" not in str(e).lower() and "ElevenLabs 401" not in str(e) and "ElevenLabs 429" not in str(e):
                     raise
-                console.print("[yellow]ElevenLabs is out of credits: rendering with the PREVIEW voice (re-voice before posting)[/]")
-                words, preview = voice.synthesize(script, short_id, work, "say"), True
-            vmeta.write_text(json.dumps({"provider": "say" if preview else (voice_provider or settings()["voice"]["provider"]), "preview": preview}), encoding="utf-8")
+                console.print("[yellow]ElevenLabs is out of credits: rendering with the local voice as a PREVIEW (re-voice before posting)[/]")
+                words, preview = voice.synthesize(script, short_id, work, "kokoro"), True
+            vmeta.write_text(json.dumps({"provider": "kokoro" if preview else (voice_provider or voice.default_provider()), "preview": preview}), encoding="utf-8")
 
         if keep_shots and (work / "shots.json").exists():
             console.print(f"[cyan]shots[/] {short_id}: reusing existing shot plan")
@@ -105,6 +122,7 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
             shots.validate(doc)
         else:
             doc = _direct_or_fallback(script, words, short_id, work, director_notes)
+            doc = _add_meme(doc, script, short_id, work)
         shots_path = work / "shots.json"
         shots_path.write_text(json.dumps(doc, indent=1), encoding="utf-8")
 

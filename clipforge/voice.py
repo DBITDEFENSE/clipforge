@@ -144,8 +144,32 @@ def _align_tokens(audio: Path, tokens: list[str]) -> list[Word]:
     return _to_words(raw)
 
 
+def local_voice_config() -> dict:
+    """Per-channel local voice (Kokoro) settings, falling back to settings.yaml voice.local."""
+    from .tts_local import DEFAULTS
+
+    base = DEFAULTS | (settings()["voice"].get("local") or {})
+    try:
+        from .accounts import current
+
+        v = current().get("voice") or {}
+    except Exception:  # noqa: BLE001
+        v = {}
+    return base | {k: v[k] for k in DEFAULTS if k in v}
+
+
+def default_provider() -> str:
+    try:
+        from .accounts import current
+
+        p = (current().get("voice") or {}).get("provider")
+    except Exception:  # noqa: BLE001
+        p = None
+    return p or settings()["voice"]["provider"]
+
+
 def synthesize(script: Script, short_id: str, workdir: Path, provider: str | None = None) -> list[Word]:
-    provider = provider or settings()["voice"]["provider"]
+    provider = provider or default_provider()
     tokens = script.spoken_text().split()
     mp3 = workdir / "vo.mp3"
     if provider == "elevenlabs":
@@ -157,6 +181,14 @@ def synthesize(script: Script, short_id: str, workdir: Path, provider: str | Non
         if take is None:
             raise FileNotFoundError(f"no take found at {TAKES}/{short_id}.wav|mp3|m4a")
         _to_mp3(take, mp3)
+        words = _align_tokens(mp3, tokens)
+    elif provider == "kokoro":
+        from . import tts_local
+
+        cfg = local_voice_config()
+        wav = workdir / "vo_local.wav"
+        tts_local.synth(build_tts_text(tokens)[0], wav, cfg)
+        tts_local.finish(wav, mp3, cfg)
         words = _align_tokens(mp3, tokens)
     elif provider == "say":
         wav = workdir / "vo_say.wav"

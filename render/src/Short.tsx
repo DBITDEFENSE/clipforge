@@ -15,6 +15,7 @@ import {TerminalCard} from './components/TerminalCard';
 import {Alarm, EmojiRain, Fire, Glitch, Shake, Sticker} from './components/FX';
 import {Popups} from './components/Popups';
 import {Reaction} from './components/Reaction';
+import {Meme} from './components/Meme';
 import {MONO, palette} from './fonts';
 import type {Shot, ShotsDoc} from './types';
 
@@ -35,6 +36,7 @@ const ShotView: React.FC<{shot: Shot; doc: ShotsDoc}> = ({shot, doc}) => {
     case 'cve': body = <CVEScoreCard {...common} />; break;
     case 'reaction': body = <Reaction {...common} />; break;
     case 'popups': body = <Popups {...common} />; break;
+    case 'meme': body = <Meme {...common} />; break;
     case 'broll': body = <BRoll props={shot.props} duration={shot.end_frame - shot.start_frame} brand={brand} layout={layout} />; break;
   }
   const lower = shot.props.lower;
@@ -50,7 +52,7 @@ const ShotView: React.FC<{shot: Shot; doc: ShotsDoc}> = ({shot, doc}) => {
       {fx === 'emoji_rain' ? <EmojiRain emoji={emoji} /> : null}
       {moved}
       {fx === 'alarm' ? <Alarm brand={brand} layout={layout} text={shot.props.alert_text} /> : null}
-      {emoji && shot.type !== 'reaction' && fx !== 'emoji_rain' && !lower?.title ? <Sticker emoji={emoji} layout={layout} side={side} /> : null}
+      {emoji && shot.type !== 'reaction' && shot.type !== 'meme' && fx !== 'emoji_rain' && !lower?.title ? <Sticker emoji={emoji} layout={layout} side={side} /> : null}
       {lower?.title ? <LowerThird title={lower.title} sub={lower.sub} brand={brand} layout={layout} /> : null}
       {shot.props.sfx_src ? <Audio src={staticFile(shot.props.sfx_src)} volume={shot.props.sfx_volume ?? 0.4} /> : null}
     </>

@@ -202,7 +202,7 @@ function vHome() {
   const running = S.jobs.find(j => j.status === 'running');
   const step = (n, state, title, body, btn) => `<div class="step ${state}"><div class="row"><div class="num">${state === 'done' ? '✓' : n}</div><h3>${title}</h3></div><p>${body}</p>${btn || ''}</div>`;
   return `<h1>Howdy, ${esc(ME.name)} 👋</h1><p class="sub">Here's where things stand. Work left to right: make shorts, review them, schedule them, and the studio posts them for you.</p>
-  ${preview ? `<div class="banner">⚠️<div class="grow"><b>${preview} short${preview > 1 ? 's use' : ' uses'} the robotic preview voice.</b> <span class="muted">ElevenLabs is out of credits. Top up at elevenlabs.io, then hit <b>Re-voice</b> on each short (Review tab).</span></div></div>` : ''}
+  ${preview ? `<div class="banner">⚠️<div class="grow"><b>${preview} short${preview > 1 ? 's have' : ' has'} a placeholder voice.</b> <span class="muted">Pick a voice in Settings → Voice (the local one is free), then hit <b>Re-voice</b> on each short.</span></div></div>` : ''}
   <div class="steps">
     ${step(1, S.shorts.length ? 'done' : 'todo', 'Make shorts', S.shorts.length ? `${S.shorts.length} made so far. Paste more links any time.` : 'Paste a YouTube/X/TikTok link. ClipForge finds the stories and makes original shorts.', `<a class="btn sm" href="#make">Make shorts</a>`)}
     ${step(2, waiting ? 'todo' : (S.shorts.length ? 'done' : ''), 'Review', waiting ? `<b style="color:var(--text)">${waiting} waiting</b> for you to approve, regenerate or reject.` : 'Nothing waiting.', waiting ? `<a class="btn sm" href="#review">Review ${waiting}</a>` : '')}
@@ -266,7 +266,7 @@ function vReview() {
   const count = f => S.shorts.filter(s => s.review === f).length;
   return `<h1>Review</h1><p class="sub">Watch each short. <b>Approve</b> puts it in your next posting slot. <b>Regenerate</b> remakes it with your notes. <b>Reject</b> drops it.</p>
   <div class="tabs">${[['pending', 'To review'], ['approved', 'Scheduled'], ['rejected', 'Rejected'], ['all', 'All']].map(([f, l]) => `<button class="tab ${filter === f ? 'on' : ''}" onclick="filter='${f}';lastRender='';render()">${l} ${f !== 'all' ? count(f) : S.shorts.length}</button>`).join('')}</div>
-  <div class="legend"><span><span class="pill ok">QA ✓</span> passed the automatic checks</span><span><span class="pill warn">Preview voice</span> robotic placeholder, re-voice before posting</span><span><span class="pill ok">Original ✓</span> no phrases copied from the source</span></div>
+  <div class="legend"><span><span class="pill ok">QA ✓</span> passed the automatic checks</span><span><span class="pill warn">Preview voice</span> placeholder, re-voice before posting</span><span><span class="pill ok">Original ✓</span> no phrases copied from the source</span></div>
   ${list.length ? `<div class="grid">${list.map(card).join('')}</div>` : `<div class="empty">${filter === 'pending' ? 'All caught up. <a href="#make">Make more shorts →</a>' : 'Nothing here.'}</div>`}`;
 }
 const WORKING = s => !['done', 'flagged', 'preview', 'failed'].includes(s.status);
@@ -296,7 +296,7 @@ const statusPill = (p, st) => { const cls = {posted: 'ok', scheduled: 'ac', queu
   return `<span class="pill ${cls}" title="${esc(st.error || '')}">${p === 'youtube' ? '▶' : '♪'} ${label}${st.url ? ` <a href="${esc(st.url)}" target="_blank">↗</a>` : ''}</span>`; };
 async function reject(id) { const notes = prompt('Reject this short. Why? (optional, it helps later)'); if (notes === null) return; try { await api('/api/reject', {id, notes}); toast('Rejected'); refresh(); } catch (e) { toast(e.message, true); } }
 async function unapprove(id) { try { const j = await api('/api/unapprove', {id}); toast(j.notes?.length ? j.notes.join(' · ') : 'Unscheduled, back in To review', !!j.notes?.length); refresh(); } catch (e) { toast(e.message, true); } }
-async function revoice(id) { if (!confirm('Re-voice with your ElevenLabs voice? Uses about 400–900 credits.')) return; try { const j = await api('/api/revoice', {id}); openJob = j.id; toast('Re-voicing. Follow it on the Make tab.'); refresh(); } catch (e) { toast(e.message, true); } }
+async function revoice(id) { if (!confirm(`Re-voice with ${ME.name}'s current voice (Settings → Voice)?`)) return; try { const j = await api('/api/revoice', {id}); openJob = j.id; toast('Re-voicing. Follow it on the Make tab.'); refresh(); } catch (e) { toast(e.message, true); } }
 
 function openRevise(id) {
   const s = S.shorts.find(x => x.id === id);
@@ -305,7 +305,7 @@ function openRevise(id) {
   <label class="f">What should change? <small>talk to it like an editor</small></label><textarea id="rnotes" rows="5" placeholder="e.g. Hook is slow, open on the outage number. More jokes in the middle. More reactions, fewer code cards.">${esc(s.notes || '')}</textarea>
   <label class="f">What to redo</label>
   <label class="chk"><input type="radio" name="scope" value="visuals" checked> <span><b>Just the visuals</b> <span class="muted small">— new edit, same script and voice. Free, about 2 min.</span></span></label>
-  <label class="chk"><input type="radio" name="scope" value="script"> <span><b>Script, voice and visuals</b> <span class="muted small">— rewrites with your notes and re-voices (uses ElevenLabs credits).</span></span></label>
+  <label class="chk"><input type="radio" name="scope" value="script"> <span><b>Script, voice and visuals</b> <span class="muted small">— rewrites with your notes and re-voices with the channel voice.</span></span></label>
   <div class="row" style="margin-top:20px"><button class="btn alt" onclick="doRevise('${id}')">Regenerate</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div></div>`;
   $('#modal').classList.add('on');
 }
@@ -445,7 +445,6 @@ async function loadVoices() { try { V = await api('/api/voices'); lastRender = '
 function vSettings() {
   const side = [['channel', 'Channel'], ['voice', 'Voice'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
   const body = {channel: sChannel, voice: sVoice, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
-  if (setTab === 'voice' && !V) loadVoices();
   return `<h1>Settings</h1><p class="sub">Everything here applies to <b>${esc(ME.name)}</b> only.</p>
   <div class="set"><div class="side">${side.map(([k, l]) => `<a class="${setTab === k ? 'on' : ''}" onclick="setTab='${k}';lastRender='';render()">${l}</a>`).join('')}</div><div>${body()}</div></div>`;
 }
@@ -465,15 +464,52 @@ async function saveChannel() {
   try { await api('/api/account', {name: $('#ch-name').value, handle: $('#ch-handle').value, persona: $('#ch-persona').value, colors,
       slots: $('#ch-slots').value.split(',').map(s => s.trim()).filter(Boolean)}); toast('Saved'); boot(); } catch (e) { toast(e.message, true); }
 }
-function sVoice() {
-  if (!V) return '<div class="panel">Loading voices…</div>';
-  if (V.error) return `<div class="panel"><h3>Voice</h3><p class="note w">${esc(V.error)}</p></div>`;
-  return `<div class="panel"><h3>Voice</h3><p class="sub" style="margin:6px 0 14px">Pick the narrator for ${esc(ME.name)}. Samples read the same line. A sample costs about 65 ElevenLabs credits the first time, then it's cached. Best option: clone your own voice with <code>uv run clipforge voices</code>.</p>
-    ${V.voices.map(v => `<div class="voice ${v.id === V.current ? 'cur' : ''}"><div><b>${esc(v.name)}</b> ${v.id === V.current ? '<span class="pill ok">in use</span>' : ''}${v.pick ? ' <span class="pill ac">good fit</span>' : ''}<div class="note" style="margin:2px 0 0">${esc(v.desc || '')}</div></div>
-      <div class="row">${v.id === V.current ? '' : `<button class="btn sm" onclick="useVoice('${v.id}')">Use</button>`}</div>
-      ${v.sample ? `<audio controls preload="none" src="/sample/${v.id}.mp3"></audio>` : `<button class="btn sm ghost" style="grid-column:1/-1;justify-self:start" onclick="genSample(this,'${v.id}')">▶ Generate sample (~65 credits)</button>`}</div>`).join('')}</div>`;
+let LV = null, LVsel = null;
+async function loadLocal() { try { LV = await api('/api/voices/local'); LVsel = LVsel || {...LV.config}; lastRender = ''; render(); } catch (e) { LV = {error: e.message}; } }
+const DRAWL_NAMES = {off: 'No accent', light: 'Light country', full: 'Full cowboy drawl'};
+function slider(key, label, min, max, step, fmt, hint) {
+  return `<div><label class="f">${label} <small>${fmt(LVsel[key])}${hint ? ' · ' + hint : ''}</small></label>
+    <input type="range" min="${min}" max="${max}" step="${step}" value="${LVsel[key]}" style="width:100%;accent-color:var(--accent)" oninput="this.previousElementSibling.querySelector('small').textContent=(${fmt.toString()})(parseFloat(this.value))+'${hint ? ' · ' + hint : ''}'" onchange="LVsel['${key}']=parseFloat(this.value);lastRender='';render()"></div>`;
 }
-async function useVoice(id) { try { await api('/api/account', {voice_id: id}); V.current = id; toast('Voice set for ' + ME.name); lastRender = ''; render(); } catch (e) { toast(e.message, true); } }
+function sVoice() {
+  if (!LV) { loadLocal(); return '<div class="panel">Loading voices…</div>'; }
+  if (LV.error) return `<div class="panel note w">${esc(LV.error)}</div>`;
+  const usingLocal = LV.provider === 'kokoro', sel = LVsel;
+  const same = JSON.stringify(Object.keys(sel).sort().map(k => [k, String(sel[k])])) === JSON.stringify(Object.keys(LV.config).sort().map(k => [k, String(LV.config[k])]));
+  const opt = (cur, allowNone) => (allowNone ? `<option value="" ${!cur ? 'selected' : ''}>None</option>` : '') + LV.voices.map(v => `<option value="${v.id}" ${v.id === cur ? 'selected' : ''}>${esc(v.desc)}</option>`).join('');
+  const sampleUrl = '/sample-local?cfg=' + encodeURIComponent(JSON.stringify(sel));
+  return `<div class="panel"><div class="row"><h3 class="grow">Local voice <span class="pill ok">free · unlimited · runs on your GPU</span></h3>${usingLocal && same ? '<span class="pill ok">in use</span>' : (usingLocal ? '<span class="pill warn">unsaved changes</span>' : '')}</div>
+    <p class="note" style="margin:6px 0 4px">Start from a preset, tweak, press play to hear it, then save. Like ElevenLabs' sliders, but free.</p>
+    <label class="f">Presets</label><div class="row" style="gap:8px">${Object.keys(LV.presets).map(n => `<button class="btn sm ghost" onclick="LVsel={...LV.presets['${n}']};lastRender='';render()">${esc(n)}</button>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
+      <div><label class="f">Narrator</label><select onchange="LVsel.kokoro_voice=this.value;lastRender='';render()">${opt(sel.kokoro_voice)}</select></div>
+      <div><label class="f">Blend with <small>mix in a second voice</small></label><select onchange="LVsel.blend_voice=this.value;if(!this.value)LVsel.blend=0;else if(!LVsel.blend)LVsel.blend=0.4;lastRender='';render()">${opt(sel.blend_voice, true)}</select></div>
+      ${sel.blend_voice ? slider('blend', 'Blend amount', 0, 1, 0.05, v => Math.round(v * 100) + '% second voice') : '<div></div>'}
+      ${slider('speed', 'Pace', 0.8, 1.15, 0.01, v => v.toFixed(2) + 'x', 'lower = slower drawl')}
+      ${slider('pitch', 'Pitch', -4, 3, 0.5, v => (v > 0 ? '+' : '') + v + ' semitones', 'lower = deeper')}
+      ${slider('warmth', 'Warmth / grit', 0, 1, 0.05, v => Math.round(v * 100) + '%', 'body + a little rasp')}
+      ${slider('expressive', 'Expressiveness', 0, 1, 0.05, v => Math.round(v * 100) + '%', 'more = livelier pacing')}
+      ${slider('pause', 'Pause between sentences', 0, 0.4, 0.02, v => v.toFixed(2) + 's')}
+    </div>
+    <label class="f">Accent</label>
+    <div class="tabs" style="margin:0">${LV.drawls.map(d => `<button class="tab ${sel.drawl === d ? 'on' : ''}" onclick="LVsel.drawl='${d}';lastRender='';render()">${DRAWL_NAMES[d] || d}</button>`).join('')}</div>
+    <label class="f">Hear it <small>takes a second for new settings</small></label><audio controls preload="none" src="${sampleUrl}" style="width:100%"></audio>
+    <div class="row" style="margin-top:16px"><button class="btn" ${usingLocal && same ? 'disabled' : ''} onclick="useLocal()">${usingLocal && same ? 'Saved' : 'Use this voice for ' + esc(ME.name)}</button>
+      <button class="btn ghost" onclick="LVsel={...LV.config};lastRender='';render()">Reset</button></div>
+  </div>
+  <details style="margin-top:18px"><summary>ElevenLabs voices (paid credits)</summary><div style="margin-top:12px">${sVoiceEL()}</div></details>`;
+}
+async function useLocal() {
+  try { await api('/api/account', {local_voice: LVsel}); toast('Voice saved. New and re-voiced shorts use it.'); LV = null; loadLocal(); } catch (e) { toast(e.message, true); }
+}
+function sVoiceEL() {
+  if (!V) { loadVoices(); return '<div class="note">Loading…</div>'; }
+  if (V.error) return `<p class="note w">${esc(V.error)}</p>`;
+  return V.voices.map(v => `<div class="voice ${v.id === V.current && LV?.provider === 'elevenlabs' ? 'cur' : ''}"><div><b>${esc(v.name)}</b>${v.pick ? ' <span class="pill ac">good fit</span>' : ''}<div class="note" style="margin:2px 0 0">${esc(v.desc || '')}</div></div>
+      <div class="row"><button class="btn sm ghost" onclick="useVoice('${v.id}')">Use</button></div>
+      ${v.sample ? `<audio controls preload="none" src="/sample/${v.id}.mp3"></audio>` : `<button class="btn sm ghost" style="grid-column:1/-1;justify-self:start" onclick="genSample(this,'${v.id}')">▶ Generate sample (~65 credits)</button>`}</div>`).join('');
+}
+async function useVoice(id) { try { await api('/api/account', {voice_id: id}); V.current = id; LV = null; toast('ElevenLabs voice set for ' + ME.name); loadLocal(); } catch (e) { toast(e.message, true); } }
 async function genSample(b, id) { b.textContent = 'Generating…'; const r = await fetch('/sample/' + id + '.mp3'); if (!r.ok) { const j = await r.json().catch(() => ({})); b.textContent = 'Failed'; toast((j.error || '').includes('quota') ? 'ElevenLabs is out of credits' : (j.error || 'failed'), true); return; }
   b.outerHTML = `<audio controls autoplay src="/sample/${id}.mp3" style="grid-column:1/-1;width:100%"></audio>`; V.voices.forEach(v => { if (v.id === id) v.sample = true; }); }
 function sPlatforms() {

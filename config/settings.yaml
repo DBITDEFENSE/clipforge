@@ -21,8 +21,8 @@ plan:
   niche_weights: { cyber: 1.0, tech: 0.8, ai: 0.8, gaming: 0.6, other: 0.3 }
 
 script:
-  min_words: 110
-  max_words: 160
+  min_words: 58                  # ~30s with the local drawl voice (it speaks a bit slower)
+  max_words: 76
 
 transcribe:
   model: large-v3
@@ -38,6 +38,10 @@ voice:
   style: 0.35
   speed: 1.05
   tail_ms: 450                    # breathing room after the last word
+  local:                          # provider "kokoro": free local TTS on the GPU (per-channel overrides in the studio)
+    kokoro_voice: am_fenrir
+    speed: 0.95
+    drawl: full                   # off | light | full  (Southern/country accent via phoneme rewrites)
 
 video:
   fps: 30
@@ -56,8 +60,8 @@ finish:
   crf: 15
 
 qa:
-  min_duration_s: 25
-  max_duration_s: 75
+  min_duration_s: 20
+  max_duration_s: 45
   lufs_tolerance: 1.5
 
 publish:

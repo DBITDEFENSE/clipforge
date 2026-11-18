@@ -140,3 +140,21 @@ class Word(BaseModel):
     word: str
     start_ms: int
     end_ms: int
+
+
+MemeFormat = Literal["nope_yep", "expectation_reality", "galaxy_brain", "starter_pack", "two_buttons", "pov", "nobody", "calm_chaos"]
+
+
+class MemePanel(BaseModel):
+    emoji: str = Field(description="One emoji for this panel/row/tile")
+    text: str = Field(description="<= 6 words")
+
+
+class MemeSpec(BaseModel):
+    """All fields required (structured-output limits); use '' / [] when a format doesn't use a field."""
+    format: MemeFormat
+    caption_top: str = Field(description="Top line, <= 6 words ('' if unused)")
+    caption_bottom: str = Field(description="Punchline line, <= 7 words ('' if unused)")
+    emoji: str = Field(description="The main emoji for single-image formats (pov, nobody, calm_chaos); '' otherwise")
+    panels: list[MemePanel] = Field(description="nope_yep / expectation_reality / two_buttons: exactly 2. galaxy_brain: 3-4 (dumbest first). starter_pack: 4. Others: []")
+    why_funny: str = Field(description="One line: the joke, for the editor")

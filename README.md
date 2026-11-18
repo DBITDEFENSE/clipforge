@@ -22,6 +22,11 @@ How posting works:
 - **YouTube** uploads right after you approve, as private with `publishAt`, so YouTube publishes it on time even if the studio is closed.
 - **TikTok** has no scheduling API, so the studio posts at the slot time **while it's running** (or run `clipforge publish-due` from Task Scheduler). The approve dialog follows TikTok's required posting UX (account shown, privacy with no default, interaction toggles, commercial disclosure, consent line). Until TikTok audits your app, posts are private-only.
 
+- **Local voice (free)**: Kokoro-82M runs on the GPU. Settings → Voice has presets (Radio cowboy, Trail boss, ...), two-narrator
+  blend, pace, pitch, warmth/grit, expressiveness, pauses, and a Southern/country accent (phoneme-level drawl: off / light / full).
+- **AI meme**: every short gets a meme written by a dedicated Claude pass (nope/yep, expectation vs reality, galaxy brain,
+  starter pack, two buttons, POV, nobody, calm chaos), drawn with emoji + meme type and placed to play inside the first 6 seconds.
+- **Length**: scripts target ~30 s (65-85 words); QA accepts 20-45 s.
 - **Preview voice**: if ElevenLabs is out of credits, shorts render with a robotic placeholder voice and are marked
   "Preview voice". They can't be scheduled until you hit **Re-voice** (after topping up).
 - **Originality check**: every short reports how much wording overlaps the source transcripts (7+ word runs). Informational, never blocks.
