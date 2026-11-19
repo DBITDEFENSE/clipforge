@@ -11,7 +11,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from . import db, director, finish, ingest, mine, qa, render, shots, voice, write
+from . import accounts, db, director, finish, ingest, mine, qa, render, shots, voice, write
 from .config import OUT, WORK, settings
 from .schemas import Script, Story, Word
 from .transcribe import transcribe
@@ -131,7 +131,7 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
         shots_path = work / "shots.json"
         shots_path.write_text(json.dumps(doc, indent=1), encoding="utf-8")
 
-        music = finish.pick_music(script.music_mood, short_id)
+        music = finish.pick_music(script.music_mood, short_id, accounts.current_id())
         report, fin = None, {}
         for attempt in (1, 2):
             console.print(f"[cyan]render[/] {short_id} (attempt {attempt})")
@@ -174,6 +174,28 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
         db.upsert_short(short_id, short_id, batch_id, "failed", error=str(e))
         console.print(f"[red]failed[/] {short_id}: {e}")
         return {"id": short_id, "status": "failed", "error": str(e), "title": script.title}
+
+
+def remix(short_id: str) -> dict:
+    """Re-run only the audio finish (music pick + loudness) on the existing render, then QA. Seconds, no Claude/TTS."""
+    work = WORK / "shorts" / short_id
+    with db.connect() as con:
+        row = con.execute("SELECT out_dir, qa, story_id, batch_id FROM shorts WHERE id=?", (short_id,)).fetchone()
+    if not row or not row["out_dir"] or not (work / "render.mp4").exists():
+        raise FileNotFoundError(f"{short_id}: no render to remix")
+    script = Script.model_validate_json((work / "script.json").read_text(encoding="utf-8"))
+    music = finish.pick_music(script.music_mood, short_id, accounts.current_id())
+    fin = finish.finish(work / "render.mp4", work / "final.mp4", music)
+    report = qa.check(work / "final.mp4")
+    out = Path(row["out_dir"])
+    shutil.copy2(work / "final.mp4", out / "final.mp4")
+    old = json.loads(row["qa"] or "{}")
+    report |= {k: old[k] for k in ("originality", "voice_preview") if k in old}
+    (out / "qa.json").write_text(json.dumps(report | {"finish": fin}, indent=2), encoding="utf-8")
+    preview = bool(old.get("voice_preview"))
+    status = ("preview" if preview else "done") if report["passed"] else "flagged"
+    db.upsert_short(short_id, row["story_id"], row["batch_id"], status, out_dir=str(out), qa=report)
+    return {"id": short_id, "status": status, "music": fin["music"]}
 
 
 def run(voice_provider: str | None = None) -> list[dict]:

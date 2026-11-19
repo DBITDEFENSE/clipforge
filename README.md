@@ -26,10 +26,14 @@ How posting works:
   blend, pace, pitch, warmth/grit, expressiveness, pauses, and a Southern/country accent (phoneme-level drawl: off / light / full).
 - **AI meme**: every short gets a meme written by a dedicated Claude pass (nope/yep, expectation vs reality, galaxy brain,
   starter pack, two buttons, POV, nobody, calm chaos), drawn with emoji + meme type and placed to play inside the first 6 seconds.
-- **Video models (Settings > Visuals)**: B-roll from motion graphics only, Pexels stock, **local Wan 2.1** (free, on the
-  GPU, ~29 GB one-time download), or any **fal.ai** / **Replicate** text-to-video model (Kling, Veo, Hailuo, Wan 2.2, LTX,
+- **Video models (Settings > Visuals)**: B-roll from motion graphics only, Pexels stock, **local Wan** (free, on the
+  GPU: Wan 2.1 1.3B at 480p, ~75 s/clip, or Wan 2.2 5B at 720p, sharper and slower), or any **fal.ai** / **Replicate** text-to-video model (Kling, Veo, Hailuo, Wan 2.2, LTX,
   Seedance...; your key, capped clips per short, estimated cost logged). The director writes a prompt per clip (no real
   people's likeness, logos or text); failures fall back to motion graphics. `clipforge video-test --prompt "..."` tries a model.
+- **Background music (Settings > Visuals, video & music)**: each channel gets its own library of original instrumental
+  beds generated locally with ACE-Step 1.5 (MIT license, ~11 GB one-time download, a few seconds per track). Describe the
+  channel's sound once; tracks are made per mood and each short picks one matching its mood, ducked under the voice.
+  CLI: `clipforge --account <id> music [--per-mood 2] [--replace]`. Your own tracks in `assets/music/<channel>/` work too.
 - **Gameplay split-screen**: Settings > Visuals > Layout. Graphics on top, your footage from `assets/gameplay/` looping below.
 - **Autopilot (Make tab)**: follow channels (e.g. @Fireship); each day at the set time new uploads become shorts for that
   channel and wait in Review. Off by default (it spends Claude credits). CLI: `clipforge --account <id> autopilot [--follow @x]`.
@@ -69,7 +73,8 @@ Shorts that fail QA twice are marked `flagged` (not `done`). The batch never sto
 
 1. `copy .env.example .env` and fill in `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`.
 2. `uv sync` (Python 3.12, PyTorch CUDA 12.8 for the RTX 5090) and `cd render && npm install`.
-3. Drop royalty-free music in `assets/music/` named `<mood>__name.mp3`. Moods: `tense`, `dark`, `driving`, `curious`, `upbeat`.
+3. Music: `clipforge music` generates a channel library, or drop licensed tracks in `assets/music/` (shared) or
+   `assets/music/<channel>/` named `<mood>__name.mp3`. Moods: `tense`, `dark`, `driving`, `curious`, `upbeat`.
 4. `uv run clipforge doctor` should be all green.
 
 ## Other commands
@@ -95,4 +100,5 @@ Shorts that fail QA twice are marked `flagged` (not `done`). The batch never sto
 ## Licensing notes
 
 - Remotion is free for individuals and companies of up to 3 people. DBIT Defense qualifies today. At 4+ people you need a Company License (from $25/seat/month, or $0.01/render for automation).
-- Music and B-roll must be licensed for commercial use. You're running paid ads behind winners.
+- Music and B-roll must be licensed for commercial use. ACE-Step 1.5 weights are MIT and Wan is Apache-2.0, so what
+  they generate is yours; check any provider's terms if you use fal.ai/Replicate models. You're running paid ads behind winners.

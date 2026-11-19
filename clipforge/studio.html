@@ -466,7 +466,7 @@ async function markAd(id, status) { let spend = null; if (status === 'boosted') 
 async function loadConn() { try { C = await api('/api/connections'); lastRender = ''; render(); } catch (e) {} }
 async function loadVoices() { try { V = await api('/api/voices'); lastRender = ''; render(); } catch (e) { V = {error: e.message}; lastRender = ''; render(); } }
 function vSettings() {
-  const side = [['channel', 'Channel'], ['voice', 'Voice'], ['visuals', 'Visuals & video models'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
+  const side = [['channel', 'Channel'], ['voice', 'Voice'], ['visuals', 'Visuals, video & music'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
   const body = {channel: sChannel, voice: sVoice, visuals: sVisuals, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
   return `<h1>Settings</h1><p class="sub">Everything here applies to <b>${esc(ME.name)}</b> only.</p>
   <div class="set"><div class="side">${side.map(([k, l]) => `<a class="${setTab === k ? 'on' : ''}" onclick="setTab='${k}';lastRender='';render()">${l}</a>`).join('')}</div><div>${body()}</div></div>`;
@@ -567,7 +567,7 @@ function sVisuals() {
   const c = VIS.config, eng = c.engine, models = VIS.models[eng] || [];
   const keyFor = {fal: ['FAL_KEY', VIS.keys.fal, 'https://fal.ai/dashboard/keys'], replicate: ['REPLICATE_API_TOKEN', VIS.keys.replicate, 'https://replicate.com/account/api-tokens'], pexels: ['PEXELS_API_KEY', VIS.keys.pexels, 'https://www.pexels.com/api/']}[eng];
   const desc = {none: 'Only animated graphics, memes and text. Fastest, zero cost.', pexels: 'Real licensed stock clips (free key from Pexels).',
-    local_wan: 'Generates original clips on your RTX 5090 with Wan 2.1 (open source). Free, about 1-3 min per clip. First use downloads ~29 GB.',
+    local_wan: 'Generates original clips on your RTX 5090 with open-source Wan. Free. Pick 2.1 (480p, ~75 s per clip) or 2.2 (720p, sharper, slower) below.',
     fal: 'One fal.ai key unlocks many hosted models (Kling, Veo, Hailuo, Wan 2.2, LTX, Seedance). You pay fal per clip.',
     replicate: 'One Replicate key unlocks many hosted models. You pay Replicate per clip.'};
   const ai = ['local_wan', 'fal', 'replicate'].includes(eng);
@@ -575,7 +575,7 @@ function sVisuals() {
     ${Object.entries(VIS.engines).map(([k, l]) => `<label class="voice ${eng === k ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="radio" name="eng" ${eng === k ? 'checked' : ''} onchange="saveVis({engine:'${k}', model:''})" style="accent-color:var(--accent);width:18px;height:18px">
       <div><b>${esc(l)}</b>${k === 'local_wan' ? (VIS.local_ready ? ' <span class="pill ok">downloaded</span>' : ' <span class="pill warn">downloads on first use</span>') : ''}<div class="note" style="margin:2px 0 0">${desc[k]}</div></div></label>`).join('')}
     ${models.length ? `<label class="f">Model <small>${eng === 'local_wan' ? '' : 'pick one, or type any model id from the provider'}</small></label>
-      <div class="row"><select id="vis-model" style="flex:1" onchange="saveVis({model:this.value})">${models.map(m => `<option value="${esc(m.id)}" ${m.id === c.model ? 'selected' : ''}>${esc(m.name)} · ${m.tier}</option>`).join('')}${models.some(m => m.id === c.model) ? '' : `<option selected value="${esc(c.model)}">${esc(c.model)}</option>`}</select>
+      <div class="row"><select id="vis-model" style="flex:1" onchange="saveVis({model:this.value})">${models.map(m => `<option value="${esc(m.id)}" ${m.id === c.model ? 'selected' : ''}>${esc(m.name)} · ${m.tier}${eng === 'local_wan' ? (VIS.local_models_ready[m.id] ? ' · downloaded' : ' · downloads on first use') : ''}</option>`).join('')}${models.some(m => m.id === c.model) ? '' : `<option selected value="${esc(c.model)}">${esc(c.model)}</option>`}</select>
       ${eng !== 'local_wan' ? `<input type="text" id="vis-custom" placeholder="custom model id" style="flex:1"><button class="btn sm ghost" onclick="saveVis({model:$('#vis-custom').value.trim()})">Use</button>` : ''}</div>` : ''}
     ${ai ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
       <div><label class="f">Max AI clips per short <small>${c.max_clips}</small></label><input type="range" min="0" max="5" step="1" value="${c.max_clips}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_clips:parseInt(this.value)})"></div>
@@ -587,8 +587,33 @@ function sVisuals() {
   </div>
   <div class="panel" style="margin-top:16px"><h3>Layout</h3>
     <div class="tabs" style="margin:10px 0 0"><button class="tab ${VIS.layout === 'full' ? 'on' : ''}" onclick="saveVis({layout:'full'})">Full screen</button><button class="tab ${VIS.layout === 'gameplay' ? 'on' : ''}" onclick="saveVis({layout:'gameplay'})">Gameplay split-screen</button></div>
-    <p class="note">${VIS.layout === 'gameplay' ? `Graphics on top, your gameplay footage looping underneath. ${VIS.gameplay_clips ? VIS.gameplay_clips + ' clip(s) found' : '<b style="color:var(--warn)">No clips yet</b>'} in <code>assets/gameplay/</code> (use footage you recorded or have rights to).` : 'Graphics use the whole frame.'}</p></div>`;
+    <p class="note">${VIS.layout === 'gameplay' ? `Graphics on top, your gameplay footage looping underneath. ${VIS.gameplay_clips ? VIS.gameplay_clips + ' clip(s) found' : '<b style="color:var(--warn)">No clips yet</b>'} in <code>assets/gameplay/</code> (use footage you recorded or have rights to).` : 'Graphics use the whole frame.'}</p></div>
+  ${musicPanel()}`;
 }
+let MUS = null;
+async function loadMus() { try { MUS = await api('/api/music'); lastRender = ''; render(); } catch (e) { MUS = {error: e.message}; } }
+function musicPanel() {
+  if (!MUS) { loadMus(); return ''; }
+  if (MUS.error) return '';
+  const c = MUS.config, on = c.music !== 'none', byMood = {};
+  MUS.tracks.forEach(t => (byMood[t.mood] = byMood[t.mood] || []).push(t));
+  return `<div class="panel" style="margin-top:16px"><div class="row"><div class="grow"><h3>Background music</h3>
+      <p class="note" style="margin:4px 0 0">Original instrumental beds made on your GPU with ACE-Step 1.5 (open source, MIT, yours to use). Each short picks a track that matches its mood and ducks it under the voice.${MUS.ready ? '' : ' First use downloads the model (~11 GB).'}</p></div>
+      <div class="tabs" style="margin:0"><button class="tab ${on ? 'on' : ''}" onclick="saveMus({music:'ai'})">On</button><button class="tab ${on ? '' : 'on'}" onclick="saveMus({music:'none'})">Off</button></div></div>
+    <label class="f">Channel sound <small>describe the vibe; mood (tense, upbeat…) is added per track</small></label>
+    <div class="row"><input type="text" id="mus-style" value="${esc(c.music_style)}" placeholder="${esc(c.style_effective)}" style="flex:1"><button class="btn sm ghost" onclick="saveMus({music_style:$('#mus-style').value})">Save</button></div>
+    <div class="row" style="margin-top:12px;gap:10px"><button class="btn sm alt" onclick="genMus(false)">${MUS.tracks.length ? 'Add tracks' : 'Make music library'}</button>
+      ${MUS.tracks.length ? '<button class="btn sm ghost" onclick="genMus(true)">Replace all with new style</button><button class="btn sm ghost" onclick="applyMus()">Re-mix existing shorts</button>' : ''}
+      <span class="note" style="margin:0">${MUS.tracks.length} track(s)${MUS.shared ? ` · plus ${MUS.shared} shared in assets/music/` : ''}</span></div>
+    ${MUS.moods.filter(m => byMood[m]).map(m => `<div style="margin-top:12px"><b class="small" style="text-transform:capitalize">${m}</b>
+      ${byMood[m].map(t => `<div class="row" style="gap:8px;margin-top:6px"><audio src="${t.url}" controls preload="none" style="flex:1;height:34px"></audio><button class="btn sm bad" onclick="delMus('${esc(t.name)}')">Delete</button></div>`).join('')}</div>`).join('')}
+  </div>`;
+}
+async function saveMus(v) { try { await api('/api/music', v); MUS = null; loadMus(); toast('Saved'); } catch (e) { toast(e.message, true); } }
+async function genMus(replace) { const n = replace ? 2 : Math.max(...MUS.moods.map(m => MUS.tracks.filter(t => t.mood === m).length), 0) + (MUS.tracks.length ? 1 : 2);
+  try { const j = await api('/api/music/generate', {per_mood: n, replace}); openJob = j.id; toast('Making music. Watch it on the Make tab.'); refresh(); } catch (e) { toast(e.message, true); } }
+async function applyMus() { try { const j = await api('/api/music/apply', {}); openJob = j.id; toast('Re-mixing your shorts with the music library (seconds each).'); refresh(); } catch (e) { toast(e.message, true); } }
+async function delMus(name) { if (!confirm('Delete ' + name + '?')) return; await api('/api/music/delete', {name}); MUS = null; loadMus(); }
 async function saveVis(v) { try { await api('/api/visuals', v); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
 async function saveVisKey(name) { const v = $('#vis-key').value.trim(); if (!v) return toast('Paste the key first', true); try { await api('/api/keys', {[name]: v}); toast('Key saved'); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
 async function testVis() { try { const j = await api('/api/visuals/test', {prompt: $('#vis-prompt').value}); openJob = j.id; toast('Generating a test clip. Watch it on the Make tab; it appears here when done.'); refresh(); } catch (e) { toast(e.message, true); } }

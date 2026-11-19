@@ -103,8 +103,8 @@ def toggle(account: str, source_id: int, enabled: bool) -> None:
         con.execute("UPDATE sources SET enabled=? WHERE id=? AND account=?", (int(enabled), source_id, account))
 
 
-def new_uploads(account: str, max_videos: int) -> list[dict]:
-    """Unseen uploads across enabled sources, newest first, capped. Marks them queued."""
+def new_uploads(account: str, max_videos: int, mark: bool = True) -> list[dict]:
+    """Unseen uploads across enabled sources, newest first, capped. Marks them queued (unless mark=False: a peek)."""
     found = []
     for s in [x for x in sources(account) if x["enabled"]]:
         try:
@@ -124,7 +124,7 @@ def new_uploads(account: str, max_videos: int) -> list[dict]:
             ids.add(it["id"])
     with _con() as con:
         _init(con)
-        for it in picked:
+        for it in (picked if mark else []):
             con.execute("INSERT OR REPLACE INTO seen_uploads(account,video_id,title,queued,seen) VALUES(?,?,?,1,?)",
                         (account, it["id"], it["title"], time.time()))
     return picked

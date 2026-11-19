@@ -298,6 +298,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path in ("/", "/index.html"):
                 return self._send(PAGE.read_bytes(), "text/html; charset=utf-8")
+            if path.startswith("/music/"):
+                from .config import MUSIC
+
+                p = (MUSIC / unquote(path[len("/music/"):])).resolve()
+                if MUSIC.resolve() not in p.parents or not p.is_file():
+                    return self._json({"error": "not found"}, 404)
+                return self._file(p)
+            if path == "/api/music":
+                from . import music
+                from .config import MUSIC
+
+                acc = accounts.current_id()
+                shared = [p for p in MUSIC.glob("*") if p.is_file() and p.suffix.lower() in {".mp3", ".wav", ".m4a", ".flac", ".ogg"}] if MUSIC.exists() else []
+                return self._json({"config": music.config(acc), "ready": music.ready(), "moods": list(music.MOODS),
+                                   "tracks": [{"name": p.name, "mood": p.name.split("__")[0], "url": "/music/" + p.relative_to(MUSIC).as_posix()}
+                                              for p in music.tracks(acc)],
+                                   "shared": len(shared)})
             if path.startswith("/media/"):
                 p = (OUT / unquote(path[len("/media/"):])).resolve()
                 if OUT.resolve() not in p.parents or not p.is_file():
@@ -323,13 +340,13 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/visuals":
                 from . import videogen
 
-                hub = Path.home() / ".cache" / "huggingface" / "hub" / "models--Wan-AI--Wan2.1-T2V-1.3B-Diffusers"
                 samples = sorted((OUT / "_samples").glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)[:6] if (OUT / "_samples").exists() else []
                 return self._json({"config": videogen.config(), "engines": videogen.ENGINES, "models": videogen.MODELS,
                                    "keys": {"fal": bool(secret("FAL_KEY", False)), "replicate": bool(secret("REPLICATE_API_TOKEN", False)),
                                             "pexels": bool(secret("PEXELS_API_KEY", False))},
-                                   "local_ready": hub.exists() and not any((hub / "blobs").glob("*.incomplete"))
-                                   and sum(p.stat().st_size for p in (hub / "blobs").glob("*")) > 28e9,
+                                   "local_ready": videogen.local_ready(videogen.config()["model"]) if videogen.config()["engine"] == "local_wan"
+                                   else videogen.local_ready(videogen.WAN21),
+                                   "local_models_ready": {m: videogen.local_ready(m) for m in videogen.LOCAL},
                                    "layout": (accounts.current().get("visuals") or {}).get("layout", "full"),
                                    "gameplay_clips": len([p for p in (ROOT / "assets" / "gameplay").glob("*") if p.suffix.lower() in VIDEO_EXT]),
                                    "samples": [_media(p) for p in samples]})
@@ -467,6 +484,29 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("layout") in ("full", "gameplay"):
                     v["layout"] = b["layout"]
                 accounts.update(accounts.current_id(), visuals=v)
+                return self._json({"ok": True})
+            if path == "/api/music":
+                v = {}
+                if b.get("music") in ("ai", "none"):
+                    v["music"] = b["music"]
+                if isinstance(b.get("music_style"), str):
+                    v["music_style"] = b["music_style"].strip()[:300]
+                accounts.update(accounts.current_id(), visuals=v)
+                return self._json({"ok": True})
+            if path == "/api/music/generate":
+                n = max(1, min(6, int(b.get("per_mood", 2))))
+                args = ["music", "--per-mood", str(n)] + (["--replace"] if b.get("replace") else [])
+                return self._json(JOBS.add("Make background music", args))
+            if path == "/api/music/apply":
+                return self._json(JOBS.add("Add music to existing shorts", ["remix"]))
+            if path == "/api/music/delete":
+                from . import music
+
+                name = str(b.get("name", ""))
+                p = music.folder(accounts.current_id()) / name
+                if "/" in name or "\\" in name or not p.is_file():
+                    return self._json({"error": "not found"}, 404)
+                p.unlink()
                 return self._json({"ok": True})
             if path == "/api/visuals/test":
                 prompt = (b.get("prompt") or "").strip()[:400] or "Cinematic vertical shot of a lone cowboy silhouette at dusk riding past glowing server racks in the desert, slow push-in, warm rim light"

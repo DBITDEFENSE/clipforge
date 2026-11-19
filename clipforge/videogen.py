@@ -2,7 +2,7 @@
 
   none       motion graphics only (B-roll shots become kinetic text)
   pexels     licensed stock footage (PEXELS_API_KEY)
-  local_wan  Wan 2.1 T2V 1.3B on your GPU via diffusers (Apache-2.0, free; ~29 GB one-time download, ~1-3 min per clip)
+  local_wan  Wan on your GPU via diffusers (Apache-2.0, free): 2.1 1.3B (480p, ~75 s/clip) or 2.2 5B (720p, sharper)
   fal        any fal.ai text-to-video model (FAL_KEY): Kling, Veo, Hailuo, Wan 2.2, LTX, Seedance...
   replicate  any Replicate text-to-video model (REPLICATE_API_TOKEN)
 
@@ -26,7 +26,7 @@ CACHE = DATA / "videogen_cache"
 ENGINES = {
     "none": "Motion graphics only",
     "pexels": "Stock footage (Pexels)",
-    "local_wan": "Local AI video: Wan 2.1 (free, your GPU)",
+    "local_wan": "Local AI video: Wan (free, your GPU)",
     "fal": "fal.ai video models (paid, your key)",
     "replicate": "Replicate video models (paid, your key)",
 }
@@ -46,7 +46,18 @@ MODELS = {
         {"id": "wan-video/wan-2.2-t2v-fast", "name": "Wan 2.2 fast", "tier": "$"},
         {"id": "bytedance/seedance-1-lite", "name": "Seedance 1 Lite", "tier": "$"},
     ],
-    "local_wan": [{"id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "name": "Wan 2.1 T2V 1.3B (480p)", "tier": "free"}],
+    "local_wan": [
+        {"id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "name": "Wan 2.1 1.3B: 480p, fast (~75 s/clip)", "tier": "free"},
+        {"id": "Wan-AI/Wan2.2-TI2V-5B-Diffusers", "name": "Wan 2.2 5B: 720p, sharper (~3-5 min/clip)", "tier": "free"},
+    ],
+}
+WAN21 = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+# Per local model: output size (vertical), frames (4k+1), fps, guidance, offload. The 5B reuses the 1.3B's text encoder
+# (same umt5-xxl) when that is already downloaded, which saves an 11 GB download.
+LOCAL = {
+    WAN21: {"h": 832, "w": 480, "frames": 49, "fps": 16, "guidance": 5.0, "offload": False, "min_gb": 28},
+    "Wan-AI/Wan2.2-TI2V-5B-Diffusers": {"h": 1280, "w": 704, "frames": 61, "fps": 24, "guidance": 5.0, "offload": True,
+                                        "min_gb": 22, "shared_te": WAN21},
 }
 DEFAULTS = {"engine": "pexels", "model": "", "max_clips": 2, "cost_per_clip": 0.30, "quality": "fast"}
 NEGATIVE = "text, captions, watermark, logo, subtitles, blurry, low quality, distorted face, extra fingers, static image"
@@ -156,22 +167,50 @@ def _replicate(model: str, prompt: str, dst: Path, timeout_s: int = 900) -> Path
 
 
 _WAN = None
+_WAN_ID = None
+
+
+def _hub(model: str) -> Path:
+    return Path.home() / ".cache" / "huggingface" / "hub" / ("models--" + model.replace("/", "--"))
+
+
+def local_ready(model: str) -> bool:
+    """Fully downloaded (no partial blobs, roughly the expected size)."""
+    hub, spec = _hub(model), LOCAL.get(model, {})
+    if not (hub / "snapshots").exists() or any((hub / "blobs").glob("*.incomplete")):
+        return False
+    return sum(p.stat().st_size for p in hub.rglob("*") if p.is_file()) > spec.get("min_gb", 1) * 1e9  # no symlinks on Windows: files sit in snapshots/
 
 
 def _local_wan(model: str, prompt: str, dst: Path, quality: str = "fast") -> Path:
-    global _WAN
+    global _WAN, _WAN_ID
     import torch
     from diffusers import AutoencoderKLWan, WanPipeline
 
+    spec = LOCAL.get(model, LOCAL[WAN21])
+    if _WAN is None or _WAN_ID != model:
+        release()
+        kw = {}
+        if spec.get("shared_te") and local_ready(spec["shared_te"]):
+            from transformers import UMT5EncoderModel
 
-    if _WAN is None:
+            kw["text_encoder"] = UMT5EncoderModel.from_pretrained(spec["shared_te"], subfolder="text_encoder", torch_dtype=torch.bfloat16)
         vae = AutoencoderKLWan.from_pretrained(model, subfolder="vae", torch_dtype=torch.float32)
-        _WAN = WanPipeline.from_pretrained(model, vae=vae, torch_dtype=torch.bfloat16).to("cuda")
+        _WAN = WanPipeline.from_pretrained(model, vae=vae, torch_dtype=torch.bfloat16, **kw)
+        if spec["offload"]:
+            _WAN.enable_model_cpu_offload()
+        else:
+            _WAN.to("cuda")
+        # Tiled VAE decode: without it the decode can overflow VRAM (the desktop/other apps hold several GB) and spill into
+        # system RAM, turning a ~75 s clip into 10+ minutes. Measured: 5B 555 s -> 146 s.
+        _WAN.vae.enable_tiling()
+        _WAN_ID = model
     steps = {"fast": 25, "normal": 40, "best": 50}.get(quality, 25)
     t = time.time()
-    frames = _WAN(prompt=prompt, negative_prompt=NEGATIVE, height=832, width=480, num_frames=49,
-                  guidance_scale=5.0, num_inference_steps=steps, output_type="np").frames[0]
-    _write_mp4(frames, dst, 16)
+    frames = _WAN(prompt=prompt, negative_prompt=NEGATIVE, height=spec["h"], width=spec["w"], num_frames=spec["frames"],
+                  guidance_scale=spec["guidance"], num_inference_steps=steps, output_type="np").frames[0]
+    _write_mp4(frames, dst, spec["fps"])
+    torch.cuda.empty_cache()
     print(f"  wan clip in {time.time() - t:.0f}s")
     return dst
 
@@ -193,11 +232,11 @@ def _write_mp4(frames, dst: Path, fps: int) -> None:
 
 def release() -> None:
     """Free the local model's VRAM (call after a short's clips are done)."""
-    global _WAN
+    global _WAN, _WAN_ID
     if _WAN is not None:
         import torch
 
-        _WAN = None
+        _WAN, _WAN_ID = None, None
         torch.cuda.empty_cache()
 
 

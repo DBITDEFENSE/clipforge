@@ -12,13 +12,20 @@ from .config import MUSIC, settings
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
 
 
-def pick_music(mood: str, seed: str) -> Path | None:
-    """assets/music/<mood>__anything.mp3 (or <mood>-...). Falls back to any track; None if the folder is empty."""
-    tracks = sorted(p for p in MUSIC.iterdir() if p.suffix.lower() in AUDIO_EXTS) if MUSIC.exists() else []
-    if not tracks:
-        return None
-    tagged = [p for p in tracks if re.match(rf"^{re.escape(mood)}[_\- ]", p.name, re.I)] or tracks
-    return tagged[int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(tagged)]
+def pick_music(mood: str, seed: str, account: str | None = None) -> Path | None:
+    """Channel library assets/music/<account>/ first (AI-generated or your own), then shared assets/music/.
+    Files are <mood>__anything.mp3 (or <mood>-...); falls back to any track; None if nothing exists or music is off."""
+    if account:
+        from . import music
+
+        if music.config(account)["music"] == "none":
+            return None
+    for d in ([MUSIC / account] if account else []) + [MUSIC]:
+        tracks = sorted(p for p in d.iterdir() if p.suffix.lower() in AUDIO_EXTS) if d.exists() else []
+        if tracks:
+            tagged = [p for p in tracks if re.match(rf"^{re.escape(mood)}[_\- ]", p.name, re.I)] or tracks
+            return tagged[int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(tagged)]
+    return None
 
 
 def probe_duration(path: Path) -> float:
@@ -73,7 +80,23 @@ def finish(render_mp4: Path, out_mp4: Path, music: Path | None) -> dict:
         gain += target - got
         got = loudness_of(_master(inputs, graph, gain, tp))
 
-    subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *inputs, "-filter_complex", _master(inputs, graph, gain, tp),
-                    "-map", "0:v", "-map", "[out]", "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-ar", "48000",
-                    "-movflags", "+faststart", str(out_mp4)], check=True)
-    return {"music": music.name if music else None, "mix_lufs": raw, "gain_db": round(gain, 2), "predicted_lufs": got}
+    def encode(ceiling: float) -> float:
+        subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *inputs, "-filter_complex", _master(inputs, graph, gain, ceiling),
+                        "-map", "0:v", "-map", "[out]", "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-ar", "48000",
+                        "-movflags", "+faststart", str(out_mp4)], check=True)
+        return true_peak(out_mp4)
+
+    ceiling = tp
+    peak = encode(ceiling)
+    if peak is not None and peak > tp + 0.3:  # dense bass can overshoot through the AAC encoder; pull the ceiling down once
+        ceiling = tp - (peak - tp) - 0.3
+        peak = encode(ceiling)
+    return {"music": music.name if music else None, "mix_lufs": raw, "gain_db": round(gain, 2), "predicted_lufs": got,
+            "true_peak": peak, "ceiling": round(ceiling, 2)}
+
+
+def true_peak(path: Path) -> float | None:
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128=peak=true", "-vn", "-f", "null", "-"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    m = re.search(r"Peak:\s+(-?[\d.]+) dBFS", r.stderr[r.stderr.rfind("Summary:"):])
+    return float(m.group(1)) if m else None

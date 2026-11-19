@@ -180,10 +180,14 @@ def autopilot(
         console.print(f"following [cyan]{s['label']}[/] ({s['url']}); latest: {[x['title'][:50] for x in s['latest']]}")
         return
     cfg = ap.config(acc)
-    new = ap.new_uploads(acc, int(cfg["max_videos"])) if not dry_run else []
+    new = ap.new_uploads(acc, int(cfg["max_videos"]), mark=not dry_run)
     if dry_run:
         for s in ap.sources(acc):
-            console.print(f"{s['label']}: {s['url']}")
+            console.print(f"following {s['label']}: {s['url']}")
+        for it in new:
+            console.print(f"[cyan]would make[/] {it['source']}: {it['title']}")
+        if not new:
+            console.print("No new uploads.")
         return
     if not new:
         console.print("No new uploads.")
@@ -208,6 +212,39 @@ def video_test(prompt: str = typer.Option(..., help="What to generate")):
         console.print("[red]no clip (engine is not an AI model, missing key, or the model failed; see above)[/]")
         raise typer.Exit(1)
     console.print(f"done in {time.time() - t:.0f}s: {got[0]}")
+
+
+@app.command("music")
+def music_cmd(per_mood: int = typer.Option(2, help="Tracks per mood (tops up; existing tracks are kept)"),
+              seconds: float = typer.Option(45.0, help="Track length"),
+              mood: list[str] = typer.Option(None, help="Only these moods (tense, dark, driving, curious, upbeat)"),
+              replace: bool = typer.Option(False, help="Delete this channel's AI tracks first and regenerate")):
+    """Generate this channel's background-music library locally with ACE-Step 1.5 -> assets/music/<channel>/."""
+    from . import accounts, music
+
+    acc = accounts.current_id()
+    c = music.config(acc)
+    console.print(f"[cyan]music[/] {acc}: {c['style_effective']}")
+    t = time.time()
+    made = music.build_library(acc, per_mood, seconds, mood or None, replace)
+    console.print(f"{len(made)} new track(s) in {time.time() - t:.0f}s -> {music.folder(acc)}")
+
+
+@app.command()
+def remix(short_ids: list[str] = typer.Argument(None, help="Short IDs (default: every finished short on this channel)")):
+    """Re-mix the audio (current music library + loudness) on existing shorts without re-rendering. Seconds each."""
+    from . import accounts, db, pipeline
+
+    if not short_ids:
+        with db.connect() as con:
+            short_ids = [r[0] for r in con.execute("SELECT id FROM shorts WHERE account=? AND status IN ('done','preview','flagged')"
+                                                  " AND (review IS NULL OR review != 'rejected')", (accounts.current_id(),))]
+    for sid in short_ids:
+        try:
+            r = pipeline.remix(sid)
+            console.print(f"[green]{r['status']}[/] {sid}: {r['music'] or 'no music'}")
+        except Exception as e:  # noqa: BLE001
+            console.print(f"[red]skip[/] {sid}: {e}")
 
 
 @app.command("publish-due")
@@ -285,7 +322,7 @@ def doctor():
         ("ANTHROPIC_API_KEY", bool(secret("ANTHROPIC_API_KEY", False)), "add to .env"),
         ("ELEVENLABS_API_KEY", bool(secret("ELEVENLABS_API_KEY", False)), "add to .env"),
         ("ELEVENLABS_VOICE_ID", bool(secret("ELEVENLABS_VOICE_ID", False)), "your voice clone's ID"),
-        ("music tracks", any(p.suffix.lower() in {".mp3", ".wav", ".m4a", ".flac", ".ogg"} for p in MUSIC.iterdir()), f"drop royalty-free tracks in {MUSIC} named <mood>__name.mp3"),
+        ("music tracks", any(p.suffix.lower() in {".mp3", ".wav", ".m4a", ".flac", ".ogg"} for p in MUSIC.rglob("*")), "make a library: clipforge music (or drop tracks in assets/music named <mood>__name.mp3)"),
     ]
     t = Table("check", "status", "note")
     for name, good, note in rows:
