@@ -87,6 +87,45 @@ def _to_words(raw: list[dict]) -> list[Word]:
     return out
 
 
+# ElevenLabs delivery style: (min, max) per setting. Per-channel values live in the account's voice["el"].
+EL_STYLE = {"stability": (0.0, 1.0), "similarity_boost": (0.0, 1.0), "style": (0.0, 1.0), "speed": (0.7, 1.2)}
+EL_PRESETS = {
+    "Creator energy": {"stability": 0.35, "similarity_boost": 0.85, "style": 0.35, "speed": 1.05},
+    "Hyped": {"stability": 0.2, "similarity_boost": 0.8, "style": 0.65, "speed": 1.1},
+    "Calm narrator": {"stability": 0.65, "similarity_boost": 0.8, "style": 0.1, "speed": 0.97},
+    "Deadpan": {"stability": 0.9, "similarity_boost": 0.85, "style": 0.0, "speed": 1.0},
+    "Storyteller": {"stability": 0.45, "similarity_boost": 0.75, "style": 0.5, "speed": 0.92},
+}
+
+
+def el_clean(cfg: dict) -> dict:
+    """Keep only known style keys, as floats clamped to ElevenLabs' accepted range."""
+    out = {}
+    for k, (lo, hi) in EL_STYLE.items():
+        if k in cfg:
+            out[k] = round(min(hi, max(lo, float(cfg[k]))), 2)
+    return out
+
+
+def el_defaults() -> dict:
+    return el_clean(settings()["voice"])
+
+
+def el_voice_config() -> dict:
+    """Per-channel ElevenLabs style, falling back to settings.yaml voice.*"""
+    try:
+        from .accounts import current
+
+        mine = (current().get("voice") or {}).get("el") or {}
+    except Exception:  # noqa: BLE001
+        mine = {}
+    return el_defaults() | el_clean(mine)
+
+
+def el_voice_settings(style: dict | None = None) -> dict:
+    return (el_voice_config() if style is None else el_defaults() | el_clean(style)) | {"use_speaker_boost": True}
+
+
 def _elevenlabs(text: str, out_mp3: Path) -> dict:
     cfg = settings()["voice"]
     from .accounts import voice_id as _vid
@@ -99,8 +138,7 @@ def _elevenlabs(text: str, out_mp3: Path) -> dict:
         json={
             "text": text,
             "model_id": cfg["model_id"],
-            "voice_settings": {"stability": cfg["stability"], "similarity_boost": cfg["similarity_boost"],
-                               "style": cfg["style"], "speed": cfg["speed"], "use_speaker_boost": True},
+            "voice_settings": el_voice_settings(),
         },
         timeout=180,
     )

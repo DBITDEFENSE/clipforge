@@ -338,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
                 acc = accounts.current_id()
                 return self._json({"config": ap.config(acc), "sources": ap.sources(acc)})
             if path == "/api/visuals":
-                from . import videogen
+                from . import footage, videogen
 
                 samples = sorted((OUT / "_samples").glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)[:6] if (OUT / "_samples").exists() else []
                 return self._json({"config": videogen.config(), "engines": videogen.ENGINES, "models": videogen.MODELS,
@@ -348,6 +348,8 @@ class Handler(BaseHTTPRequestHandler):
                                    else videogen.local_ready(videogen.WAN21),
                                    "local_models_ready": {m: videogen.local_ready(m) for m in videogen.LOCAL},
                                    "layout": (accounts.current().get("visuals") or {}).get("layout", "full"),
+                                   "footage": footage.config(),
+                                   "footage_modes": footage.MODES,
                                    "gameplay_clips": len([p for p in (ROOT / "assets" / "gameplay").glob("*") if p.suffix.lower() in VIDEO_EXT]),
                                    "samples": [_media(p) for p in samples]})
             if path == "/api/voices/local":
@@ -378,14 +380,27 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/voices":
                 acct = voice_lab.account_voices()
                 ids = {v["id"] for v in acct}
-                picks = [{"id": i, "name": n, "desc": d, "pick": True, "sample": voice_lab.sample_path(i).exists()} for i, n, d in voice_lab.PICKS if i in ids]
+                me = accounts.current()
+                western = me["id"] == "cyber-cowboy" or any(w in (me.get("persona") or "").lower() for w in ("cowboy", "western", "country"))
+                picks = [{"id": i, "name": n, "desc": "Cowboy & Southern · " + d, "pick": True, "sample": voice_lab.sample_path(i).exists()}
+                         for i, n, d in voice_lab.COWBOY if western and i in ids]
+                picks += [{"id": i, "name": n, "desc": d, "pick": True, "sample": voice_lab.sample_path(i).exists()} for i, n, d in voice_lab.PICKS if i in ids]
                 rest = [v | {"pick": False, "sample": voice_lab.sample_path(v["id"]).exists()} for v in acct if v["id"] not in {p["id"] for p in picks}]
-                return self._json({"current": accounts.voice_id(), "voices": picks + rest})
+                from . import voice
+
+                return self._json({"current": accounts.voice_id(), "voices": picks + rest, "style": voice.el_voice_config(),
+                                   "defaults": voice.el_defaults(), "presets": voice.EL_PRESETS})
             if path.startswith("/sample/") and path.endswith(".mp3"):
                 vid = path[len("/sample/"):-4]
                 if not vid.isalnum():
                     return self._json({"error": "bad id"}, 400)
-                return self._send(voice_lab.make_sample(vid).read_bytes(), "audio/mpeg")
+                try:
+                    style = json.loads(q.get("cfg") or "null")
+                    if style is not None and not isinstance(style, dict):
+                        raise ValueError("cfg must be an object")
+                    return self._send(voice_lab.make_sample(vid, style).read_bytes(), "audio/mpeg")
+                except (ValueError, TypeError) as e:
+                    return self._json({"error": str(e)}, 400)
             if path.startswith("/api/job/"):
                 return self._json({"log": JOBS.log(path.split("/")[3])})
             if path == "/api/defaults":
@@ -483,6 +498,16 @@ class Handler(BaseHTTPRequestHandler):
                     v["quality"] = b["quality"]
                 if b.get("layout") in ("full", "gameplay"):
                     v["layout"] = b["layout"]
+                from . import footage
+
+                if b.get("footage") in footage.MODES:
+                    v["footage"] = b["footage"]
+                if isinstance(b.get("clip_style"), str):
+                    v["clip_style"] = b["clip_style"].strip()[:300]
+                if "restyle_strength" in b:
+                    v["restyle_strength"] = round(max(0.2, min(0.8, float(b["restyle_strength"]))), 2)
+                if "max_source_clips" in b:
+                    v["max_source_clips"] = max(0, min(6, int(b["max_source_clips"])))
                 accounts.update(accounts.current_id(), visuals=v)
                 return self._json({"ok": True})
             if path == "/api/music":
@@ -521,6 +546,13 @@ class Handler(BaseHTTPRequestHandler):
                     if not str(b["voice_id"]).isalnum():
                         return self._json({"error": "bad voice id"}, 400)
                     allowed["voice"] = {"voice_id": b["voice_id"], "provider": "elevenlabs"}
+                if "el_style" in b:
+                    from . import voice
+
+                    try:
+                        allowed["voice"] = allowed.get("voice", {}) | {"el": voice.el_defaults() | voice.el_clean(b["el_style"])}
+                    except (ValueError, TypeError, AttributeError):
+                        return self._json({"error": "bad style"}, 400)
                 if "local_voice" in b:
                     from . import tts_local
 

@@ -24,9 +24,13 @@ def defaults(short_id: str) -> dict:
     s = _script(short_id)
     p = s["post"]
     tags = " ".join(p["hashtags"])
+    from .pipeline import clip_credit, with_clip_credit
+
+    sf = WORK / "shorts" / short_id / "shots.json"
+    clip = clip_credit(json.loads(sf.read_text(encoding="utf-8"))) if sf.exists() else ""
     return {
-        "youtube": {"title": s["title"][:95], "description": f"{p['caption']}\n\n{tags} #Shorts"},
-        "tiktok": {"caption": f"{p['caption']} {tags}".strip()},
+        "youtube": {"title": s["title"][:95], "description": f"{with_clip_credit(p['caption'], clip)}\n\n{tags} #Shorts"},
+        "tiktok": {"caption": f"{with_clip_credit(p['caption'], clip, ' | ')} {tags}".strip()},
         "pinned_comment": p.get("pinned_comment", ""),
     }
 

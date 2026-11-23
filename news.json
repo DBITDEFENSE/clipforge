@@ -1,0 +1,17 @@
+{
+  "news": [
+    {
+      "date": "2026-11-22",
+      "version": "0.1.0",
+      "tag": "new",
+      "title": "ClipForge has a launcher",
+      "body": "Double-click ClipForge to open the studio, check that this PC has everything it needs, read what's new, and update with one button. Your shorts, channels and keys are never touched by an update."
+    },
+    {
+      "date": "2026-11-22",
+      "version": "0.1.0",
+      "title": "Tune how your ElevenLabs voice performs",
+      "body": "Settings > Voice now has delivery presets (Creator energy, Hyped, Calm narrator, Deadpan, Storyteller) and sliders for stability, style, similarity and pace, saved per channel. Preview a style before you save it."
+    }
+  ]
+}

@@ -182,7 +182,8 @@ def local_ready(model: str) -> bool:
     return sum(p.stat().st_size for p in hub.rglob("*") if p.is_file()) > spec.get("min_gb", 1) * 1e9  # no symlinks on Windows: files sit in snapshots/
 
 
-def _local_wan(model: str, prompt: str, dst: Path, quality: str = "fast") -> Path:
+def _load(model: str):
+    """Load (or reuse) the local Wan text-to-video pipeline for `model`."""
     global _WAN, _WAN_ID
     import torch
     from diffusers import AutoencoderKLWan, WanPipeline
@@ -205,14 +206,41 @@ def _local_wan(model: str, prompt: str, dst: Path, quality: str = "fast") -> Pat
         # system RAM, turning a ~75 s clip into 10+ minutes. Measured: 5B 555 s -> 146 s.
         _WAN.vae.enable_tiling()
         _WAN_ID = model
+    return _WAN, spec
+
+
+def _local_wan(model: str, prompt: str, dst: Path, quality: str = "fast") -> Path:
+    import torch
+
+    pipe, spec = _load(model)
     steps = {"fast": 25, "normal": 40, "best": 50}.get(quality, 25)
     t = time.time()
-    frames = _WAN(prompt=prompt, negative_prompt=NEGATIVE, height=spec["h"], width=spec["w"], num_frames=spec["frames"],
+    frames = pipe(prompt=prompt, negative_prompt=NEGATIVE, height=spec["h"], width=spec["w"], num_frames=spec["frames"],
                   guidance_scale=spec["guidance"], num_inference_steps=steps, output_type="np").frames[0]
     _write_mp4(frames, dst, spec["fps"])
     torch.cuda.empty_cache()
     print(f"  wan clip in {time.time() - t:.0f}s")
     return dst
+
+
+RESTYLE_NEGATIVE = "photorealistic, live action photo, " + NEGATIVE
+
+
+def restyle(frames: list, prompt: str, strength: float = 0.5, steps: int = 30):
+    """Video-to-video with Wan 2.1 1.3B (same weights as text-to-video, so no extra download).
+    frames: PIL images (landscape 832x480, count 4k+1). strength 0 = untouched, 1 = ignore the source. Returns (T,H,W,3) floats."""
+    import torch
+    from diffusers import WanVideoToVideoPipeline
+
+    pipe, _ = _load(WAN21)
+    v2v = WanVideoToVideoPipeline.from_pipe(pipe)
+    w, h = frames[0].size
+    t = time.time()
+    out = v2v(video=frames, prompt=prompt, negative_prompt=RESTYLE_NEGATIVE, height=h, width=w, guidance_scale=5.0,
+              strength=float(strength), num_inference_steps=steps, output_type="np").frames[0]
+    torch.cuda.empty_cache()
+    print(f"  restyled {len(frames)} frames in {time.time() - t:.0f}s")
+    return out
 
 
 def _write_mp4(frames, dst: Path, fps: int) -> None:

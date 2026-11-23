@@ -277,11 +277,20 @@ def studio(port: int = typer.Option(8790), open_it: bool = typer.Option(True, "-
 
 
 @app.command()
-def setup(port: int = typer.Option(8788)):
+def launcher(port: int = typer.Option(8787), open_it: bool = typer.Option(True, "--open/--no-open")):
+    """The front door: open the studio, see what's new, check this PC, update. ClipForge.bat runs this."""
+    from .launcher import serve
+
+    ensure_dirs()
+    serve(port, open_it)
+
+
+@app.command()
+def setup(port: int = typer.Option(8788), open_it: bool = typer.Option(True, "--open/--no-open")):
     """Open a local page to paste API keys (validated, saved to .env)."""
     from .setup_page import serve
 
-    serve(port)
+    serve(port, open_it)
 
 
 @app.command()

@@ -464,7 +464,7 @@ async function markAd(id, status) { let spend = null; if (status === 'boosted') 
 
 /* ================= Settings ================= */
 async function loadConn() { try { C = await api('/api/connections'); lastRender = ''; render(); } catch (e) {} }
-async function loadVoices() { try { V = await api('/api/voices'); lastRender = ''; render(); } catch (e) { V = {error: e.message}; lastRender = ''; render(); } }
+async function loadVoices() { try { V = await api('/api/voices'); ELsel = {...V.style}; ELprev = null; lastRender = ''; render(); } catch (e) { V = {error: e.message}; lastRender = ''; render(); } }
 function vSettings() {
   const side = [['channel', 'Channel'], ['voice', 'Voice'], ['visuals', 'Visuals, video & music'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
   const body = {channel: sChannel, voice: sVoice, visuals: sVisuals, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
@@ -501,7 +501,7 @@ function sVoice() {
   const same = JSON.stringify(Object.keys(sel).sort().map(k => [k, String(sel[k])])) === JSON.stringify(Object.keys(LV.config).sort().map(k => [k, String(LV.config[k])]));
   const opt = (cur, allowNone) => (allowNone ? `<option value="" ${!cur ? 'selected' : ''}>None</option>` : '') + LV.voices.map(v => `<option value="${v.id}" ${v.id === cur ? 'selected' : ''}>${esc(v.desc)}</option>`).join('');
   const sampleUrl = '/sample-local?cfg=' + encodeURIComponent(JSON.stringify(sel));
-  return `<div class="panel"><div class="row"><h3 class="grow">Local voice <span class="pill ok">free · unlimited · runs on your GPU</span></h3>${usingLocal && same ? '<span class="pill ok">in use</span>' : (usingLocal ? '<span class="pill warn">unsaved changes</span>' : '')}</div>
+  const local = `<div class="panel"><div class="row"><h3 class="grow">Local voice <span class="pill ok">free · unlimited · runs on your GPU</span></h3>${usingLocal && same ? '<span class="pill ok">in use</span>' : (usingLocal ? '<span class="pill warn">unsaved changes</span>' : '')}</div>
     <p class="note" style="margin:6px 0 4px">Start from a preset, tweak, press play to hear it, then save. Like ElevenLabs' sliders, but free.</p>
     <label class="f">Presets</label><div class="row" style="gap:8px">${Object.keys(LV.presets).map(n => `<button class="btn sm ghost" onclick="LVsel={...LV.presets['${n}']};lastRender='';render()">${esc(n)}</button>`).join('')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
@@ -519,8 +519,11 @@ function sVoice() {
     <label class="f">Hear it <small>takes a second for new settings</small></label><audio controls preload="none" src="${sampleUrl}" style="width:100%"></audio>
     <div class="row" style="margin-top:16px"><button class="btn" ${usingLocal && same ? 'disabled' : ''} onclick="useLocal()">${usingLocal && same ? 'Saved' : 'Use this voice for ' + esc(ME.name)}</button>
       <button class="btn ghost" onclick="LVsel={...LV.config};lastRender='';render()">Reset</button></div>
-  </div>
-  <details style="margin-top:18px"><summary>ElevenLabs voices (paid credits)</summary><div style="margin-top:12px">${sVoiceEL()}</div></details>`;
+  </div>`;
+  return `<div class="panel"><div class="row"><h3 class="grow">ElevenLabs voice <span class="pill ac">primary</span></h3>${usingLocal ? `<span class="pill warn">${esc(ME.name)} is on the local voice: pick one below to switch back</span>` : '<span class="pill ok">in use</span>'}</div>
+    <p class="note" style="margin:6px 0 12px">Every short is voiced with ElevenLabs. If credits run out, the short renders with the local voice as a preview and must be re-voiced before it can be scheduled.</p>
+    ${sVoiceEL()}</div>
+  <details style="margin-top:18px"><summary>Free local voice (backup and previews)</summary><div style="margin-top:12px">${local}</div></details>`;
 }
 async function useLocal() {
   try { await api('/api/account', {local_voice: LVsel}); toast('Voice saved. New and re-voiced shorts use it.'); LV = null; loadLocal(); } catch (e) { toast(e.message, true); }
@@ -528,10 +531,40 @@ async function useLocal() {
 function sVoiceEL() {
   if (!V) { loadVoices(); return '<div class="note">Loading…</div>'; }
   if (V.error) return `<p class="note w">${esc(V.error)}</p>`;
-  return V.voices.map(v => `<div class="voice ${v.id === V.current && LV?.provider === 'elevenlabs' ? 'cur' : ''}"><div><b>${esc(v.name)}</b>${v.pick ? ' <span class="pill ac">good fit</span>' : ''}<div class="note" style="margin:2px 0 0">${esc(v.desc || '')}</div></div>
+  return sStyleEL() + '<label class="f">Voice</label>' + V.voices.map(v => `<div class="voice${v.id === V.current && LV?.provider === 'elevenlabs' ? 'cur' : ''}"><div><b>${esc(v.name)}</b>${v.pick ? ' <span class="pill ac">good fit</span>' : ''}<div class="note" style="margin:2px 0 0">${esc(v.desc || '')}</div></div>
       <div class="row"><button class="btn sm ghost" onclick="useVoice('${v.id}')">Use</button></div>
       ${v.sample ? `<audio controls preload="none" src="/sample/${v.id}.mp3"></audio>` : `<button class="btn sm ghost" style="grid-column:1/-1;justify-self:start" onclick="genSample(this,'${v.id}')">▶ Generate sample (~65 credits)</button>`}</div>`).join('');
 }
+let ELsel = null, ELprev = null;
+const elKey = o => ['stability', 'similarity_boost', 'style', 'speed'].map(k => Number(o[k]).toFixed(2)).join('|');
+function elSlider(key, label, min, max, step, fmt, hint) {
+  return `<div><label class="f">${label} <small>${fmt(ELsel[key])} · ${hint}</small></label>
+    <input type="range" min="${min}" max="${max}" step="${step}" value="${ELsel[key]}" style="width:100%;accent-color:var(--accent)" oninput="this.previousElementSibling.querySelector('small').textContent=(${fmt.toString()})(parseFloat(this.value))+' · ${hint}'" onchange="ELsel['${key}']=parseFloat(this.value);lastRender='';render()"></div>`;
+}
+function sStyleEL() {
+  if (!ELsel) return '';
+  const pct = v => Math.round(v * 100) + '%', saved = elKey(ELsel) === elKey(V.style);
+  const cur = V.voices.find(v => v.id === V.current), prevKey = V.current + '|' + elKey(ELsel);
+  const preset = (n, p) => `<button class="btn sm ${elKey(p) === elKey(ELsel) ? '' : 'ghost'}" onclick='ELsel=${JSON.stringify(p)};lastRender="";render()'>${esc(n)}</button>`;
+  return `<div class="row"><label class="f grow" style="margin:0">Delivery style <small>how ${esc(cur ? cur.name : 'the voice')} performs the script</small></label>${saved ? '' : '<span class="pill warn">unsaved changes</span>'}</div>
+    <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">${Object.entries(V.presets).map(([n, p]) => preset(n, p)).join('')}${preset('Default', V.defaults)}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
+      ${elSlider('stability', 'Stability', 0, 1, 0.05, pct, 'lower = more expressive, higher = steadier')}
+      ${elSlider('style', 'Style exaggeration', 0, 1, 0.05, pct, 'pushes the voice’s character harder')}
+      ${elSlider('similarity_boost', 'Similarity', 0, 1, 0.05, pct, 'how closely it sticks to the original voice')}
+      ${elSlider('speed', 'Pace', 0.7, 1.2, 0.01, v => v.toFixed(2) + 'x', 'talking speed')}
+    </div>
+    <div class="row" style="margin:14px 0 6px;flex-wrap:wrap"><button class="btn" ${saved ? 'disabled' : ''} onclick="saveStyleEL()">${saved ? 'Saved' : 'Save style for ' + esc(ME.name)}</button>
+      <button class="btn ghost" ${saved ? 'disabled' : ''} onclick="ELsel={...V.style};lastRender='';render()">Reset</button>
+      ${V.current ? (ELprev === prevKey ? '' : `<button class="btn ghost" onclick="prevStyleEL(this)">▶ Hear this style (~65 credits)</button>`) : '<span class="note">Pick a voice below to preview.</span>'}</div>
+    ${V.current && ELprev === prevKey ? `<audio controls src="/sample/${V.current}.mp3?cfg=${encodeURIComponent(JSON.stringify(ELsel))}" style="width:100%"></audio>` : ''}
+    <div style="height:14px"></div>`;
+}
+async function saveStyleEL() { try { await api('/api/account', {el_style: ELsel}); V.style = {...ELsel}; toast('Style saved. New and re-voiced shorts use it.'); lastRender = ''; render(); } catch (e) { toast(e.message, true); } }
+async function prevStyleEL(b) { b.textContent = 'Generating…'; b.disabled = true; const key = V.current + '|' + elKey(ELsel);
+  const r = await fetch('/sample/' + V.current + '.mp3?cfg=' + encodeURIComponent(JSON.stringify(ELsel)));
+  if (!r.ok) { const j = await r.json().catch(() => ({})); b.textContent = 'Failed, retry'; b.disabled = false; toast((j.error || '').includes('quota') ? 'ElevenLabs is out of credits' : (j.error || 'failed'), true); return; }
+  ELprev = key; lastRender = ''; render(); }
 async function useVoice(id) { try { await api('/api/account', {voice_id: id}); V.current = id; LV = null; toast('ElevenLabs voice set for ' + ME.name); loadLocal(); } catch (e) { toast(e.message, true); } }
 async function genSample(b, id) { b.textContent = 'Generating…'; const r = await fetch('/sample/' + id + '.mp3'); if (!r.ok) { const j = await r.json().catch(() => ({})); b.textContent = 'Failed'; toast((j.error || '').includes('quota') ? 'ElevenLabs is out of credits' : (j.error || 'failed'), true); return; }
   b.outerHTML = `<audio controls autoplay src="/sample/${id}.mp3" style="grid-column:1/-1;width:100%"></audio>`; V.voices.forEach(v => { if (v.id === id) v.sample = true; }); }
@@ -571,7 +604,7 @@ function sVisuals() {
     fal: 'One fal.ai key unlocks many hosted models (Kling, Veo, Hailuo, Wan 2.2, LTX, Seedance). You pay fal per clip.',
     replicate: 'One Replicate key unlocks many hosted models. You pay Replicate per clip.'};
   const ai = ['local_wan', 'fal', 'replicate'].includes(eng);
-  return `<div class="panel"><h3>B-roll source</h3><p class="note" style="margin:6px 0 14px">What fills the "show, don't tell" moments between graphics. The director writes a prompt for each clip; anything that fails falls back to motion graphics.</p>
+  return `${footagePanel()}<div class="panel" style="margin-top:16px"><h3>B-roll source</h3><p class="note" style="margin:6px 0 14px">What fills the "show, don't tell" moments between graphics. The director writes a prompt for each clip; anything that fails falls back to motion graphics.</p>
     ${Object.entries(VIS.engines).map(([k, l]) => `<label class="voice ${eng === k ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="radio" name="eng" ${eng === k ? 'checked' : ''} onchange="saveVis({engine:'${k}', model:''})" style="accent-color:var(--accent);width:18px;height:18px">
       <div><b>${esc(l)}</b>${k === 'local_wan' ? (VIS.local_ready ? ' <span class="pill ok">downloaded</span>' : ' <span class="pill warn">downloads on first use</span>') : ''}<div class="note" style="margin:2px 0 0">${desc[k]}</div></div></label>`).join('')}
     ${models.length ? `<label class="f">Model <small>${eng === 'local_wan' ? '' : 'pick one, or type any model id from the provider'}</small></label>
@@ -589,6 +622,16 @@ function sVisuals() {
     <div class="tabs" style="margin:10px 0 0"><button class="tab ${VIS.layout === 'full' ? 'on' : ''}" onclick="saveVis({layout:'full'})">Full screen</button><button class="tab ${VIS.layout === 'gameplay' ? 'on' : ''}" onclick="saveVis({layout:'gameplay'})">Gameplay split-screen</button></div>
     <p class="note">${VIS.layout === 'gameplay' ? `Graphics on top, your gameplay footage looping underneath. ${VIS.gameplay_clips ? VIS.gameplay_clips + ' clip(s) found' : '<b style="color:var(--warn)">No clips yet</b>'} in <code>assets/gameplay/</code> (use footage you recorded or have rights to).` : 'Graphics use the whole frame.'}</p></div>
   ${musicPanel()}`;
+}
+function footagePanel() {
+  const f = VIS.footage, m = f.footage;
+  return `<div class="panel"><h3>Clips from the source video</h3><p class="note" style="margin:6px 0 14px">The director looks at the video you fed in and drops in short real moments (news footage, an on-screen headline, the demo, the thing being talked about), up to 5 s each, muted under your narration, with an on-screen credit and a "Clips:" line in the post. They back up your commentary; they don't replace the video.</p>
+    ${Object.entries(VIS.footage_modes).map(([k, l]) => `<label class="voice ${m === k ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="radio" name="foot" ${m === k ? 'checked' : ''} onchange="saveVis({footage:'${k}'})" style="accent-color:var(--accent);width:18px;height:18px"><div><b>${{off: 'Off', clips: 'Clips', restyled: 'Clips, restyled'}[k]}</b><div class="note" style="margin:2px 0 0">${esc(l)}</div></div></label>`).join('')}
+    ${m !== 'off' ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
+      <div><label class="f">Max clips per short <small>${f.max_source_clips}</small></label><input type="range" min="0" max="6" step="1" value="${f.max_source_clips}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_source_clips:parseInt(this.value)})"></div>
+      ${m === 'restyled' ? `<div><label class="f">Restyle strength <small>${f.restyle_strength} · low keeps the original, high reimagines it</small></label><input type="range" min="0.2" max="0.8" step="0.05" value="${f.restyle_strength}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({restyle_strength:parseFloat(this.value)})"></div>` : '<div></div>'}</div>` : ''}
+    ${m === 'restyled' ? `<label class="f">Restyle look <small>a prompt for the GPU; leave empty for the channel default</small></label><div class="row"><input type="text" id="clip-style" value="${esc(f.clip_style)}" placeholder="${esc(f.style_effective)}" style="flex:1"><button class="btn sm" onclick="saveVis({clip_style:$('#clip-style').value})">Save</button></div>` : ''}
+  </div>`;
 }
 let MUS = null;
 async function loadMus() { try { MUS = await api('/api/music'); lastRender = ''; render(); } catch (e) { MUS = {error: e.message}; } }

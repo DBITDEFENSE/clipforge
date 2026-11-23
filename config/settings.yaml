@@ -30,7 +30,7 @@ transcribe:
   batch_size: 16
 
 voice:
-  provider: elevenlabs            # elevenlabs | say (Windows built-in, for testing only) | take (takes/<short_id>.wav)
+  provider: elevenlabs            # primary. Also: kokoro (free local GPU voice; auto-used as a PREVIEW when EL credits run out) | take (takes/<short_id>.wav) | say (testing only)
   model_id: eleven_v4             # most expressive EL model as of 2026-11; eleven_multilingual_v2 also works
   output_format: mp3_44100_192
   stability: 0.35                 # lower = more expressive (creator energy); raise if takes get wobbly
@@ -75,3 +75,7 @@ ads:                              # recommendations only; ClipForge never spends
   lift: 1.5                       # x your median views
   test_daily_usd: 20
   test_days: 3
+
+launcher:                         # where ClipForge.bat checks for updates and news (a public GitHub repo)
+  repo: DBITDEFENSE/clipforge     # owner/name; leave empty to turn updates off. Keep in sync with $Repo in install.ps1
+  branch: master

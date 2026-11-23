@@ -36,17 +36,41 @@ PICKS = [
     ("bIHbv24MWmeRgasZH58o", "Will", "relaxed, chill"),
 ]
 
+# ElevenLabs voice-library voices for western/country channels. Shown only when they're on the account (add them from
+# the ElevenLabs Voice Library first) and only for western channels.
+COWBOY = [
+    ("Bj9UqZbhQsanLzgalpEG", "Austin", "deep, raspy Texas good ol' boy (most used)"),
+    ("ruirxsoakN0GWmGNIo04", "John Morgan", "gritty Southern cowboy"),
+    ("KTPVrSVAEUSJRClDzBw7", "Bob", "rugged, warm cowboy"),
+    ("0hh7H4ZVAtaGpm1VZyEN", "David", "deep, weathered Southern drawl"),
+    ("Zg15Et3nnFl0MqqzwK3w", "Hayden", "young Texan, bold and clear"),
+    ("nylWpjFYhUvfMc8YQinc", "Rio", "warm young Texan, conversational"),
+    ("9T9vSqRrPPxIs5wpyZfK", "Eric", "confident, sassy Southern"),
+    ("YXpFCvM1S3JbWEJhoskW", "Wyatt", "wise old rustic cowboy (slower)"),
+    ("aOcS60CY8CoaVaZfqqb5", "Arthur", "engaging Southern cowboy narrator (slower)"),
+]
+
 
 def _key() -> str:
     return secret("ELEVENLABS_API_KEY")
 
 
-def sample_path(voice_id: str) -> Path:
-    return AUD / f"{voice_id}.mp3"
+def sample_path(voice_id: str, style: dict | None = None) -> Path:
+    """Default-style samples are cached per voice; a custom style gets its own cached file."""
+    from .voice import el_clean, el_defaults
+
+    style = el_defaults() | el_clean(style or {})
+    if style == el_defaults():
+        return AUD / f"{voice_id}.mp3"
+    import hashlib
+
+    return AUD / f"{voice_id}-{hashlib.md5(json.dumps(style, sort_keys=True).encode()).hexdigest()[:10]}.mp3"
 
 
-def make_sample(voice_id: str) -> Path:
-    p = sample_path(voice_id)
+def make_sample(voice_id: str, style: dict | None = None) -> Path:
+    from .voice import el_voice_settings
+
+    p = sample_path(voice_id, style)
     if p.exists():
         return p
     cfg = settings()["voice"]
@@ -55,8 +79,7 @@ def make_sample(voice_id: str) -> Path:
         params={"output_format": "mp3_44100_128"},
         headers={"xi-api-key": _key()},
         json={"text": SAMPLE, "model_id": cfg["model_id"],
-              "voice_settings": {"stability": cfg["stability"], "similarity_boost": cfg["similarity_boost"],
-                                 "style": cfg["style"], "speed": cfg["speed"], "use_speaker_boost": True}},
+              "voice_settings": el_voice_settings(style or {})},
         timeout=120,
     )
     if r.status_code != 200:

@@ -103,7 +103,7 @@ class Review(BaseModel):
 
 
 # ---------- director (Claude-authored shots) ----------
-ShotKind = Literal["kinetic", "headline", "stat", "code", "terminal", "diagram", "cve", "broll", "reaction", "popups"]
+ShotKind = Literal["kinetic", "headline", "stat", "code", "terminal", "diagram", "cve", "broll", "clip", "reaction", "popups"]
 FxKind = Literal["none", "fire", "alarm", "glitch", "shake", "emoji_rain"]
 SfxKind = Literal["none", "whoosh", "boom", "ding", "alarm", "glitch", "pop", "cash", "riser"]
 MotionKind = Literal["pop", "punch_in", "drift", "none"]
@@ -125,6 +125,7 @@ class DirectedShot(BaseModel):
     highlight: int = Field(description="code: 1-based line to highlight, 0 for none. diagram: 0-based index of the compromised node, -1 for none")
     broll_query: str = Field(description="broll: 2-4 word filmable stock search ('server room lights'). Else ''")
     video_prompt: str = Field(description="broll: 1-2 sentence prompt for an AI video model: subject, action, setting, lighting, camera move. No real people's likeness, no brand logos, no on-screen text. Else ''")
+    clip_id: str = Field(description="clip: the source moment id to show ('C7'). Else ''")
     lower_title: str = Field(description="Optional lower-third title (vendor, actor, source), <= 4 words; '' for none")
     lower_sub: str = Field(description="Lower-third subtitle, <= 6 words; '' for none")
     emoji: str = Field(description="reaction: the one big emoji (required). Other shots: optional corner sticker emoji. emoji_rain fx: the emoji that rains. '' for none")

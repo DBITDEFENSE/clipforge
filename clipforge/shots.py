@@ -44,6 +44,11 @@ def _gameplay(short_id: str) -> dict | None:
     return {"file": str(clips[n % len(clips)]), "src": "gameplay.mp4", "start_s": (n // 7) % 120}
 
 
+def layout_for(short_id: str) -> dict:
+    """The layout base_doc will use for this short (gameplay split-screen or full frame)."""
+    return LAYOUT_GAMEPLAY if _gameplay(short_id) else LAYOUT
+
+
 def _card_props(v) -> dict:
     if v.type == "code":
         return {"language": v.code_language or "code", "lines": v.code_lines or [], "highlight": v.code_highlight}

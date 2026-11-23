@@ -2,6 +2,32 @@
 
 Long-form videos in, original vertical shorts out. The uploads are **research input, not footage**. ClipForge watches them, pulls out the stories, and makes new segments: original scripts, your cloned voice, original animated visuals.
 
+## Install and update: the launcher
+
+On a new Windows 10/11 PC, open PowerShell and run:
+
+```powershell
+irm https://raw.githubusercontent.com/DBITDEFENSE/clipforge/master/install.ps1 | iex
+```
+
+That installs uv, Node.js and ffmpeg (winget), downloads ClipForge to `%LOCALAPPDATA%\ClipForge` and adds a **ClipForge**
+shortcut to the desktop and Start menu. The first start downloads the dependencies (several GB, including PyTorch).
+
+Double-click **ClipForge** (or `ClipForge.bat` in the folder) to open the launcher at http://127.0.0.1:8787:
+
+- **Start Studio** and **API keys** (paste and validate your keys).
+- **This PC**: what's installed and what's missing, with the fix.
+- **Latest news**: read from `news.json` in the repo.
+- **Update**: appears when the repo's `pyproject.toml` version is higher than yours. It replaces the program files and
+  syncs dependencies. `.env`, `data/`, `out/`, `work/`, `inbox/`, `takes/` and your music/gameplay files are never touched;
+  config files you edited are copied to `config/backup/<time>/` before the new defaults replace them. In a git checkout
+  the button runs `git pull --ff-only` instead.
+
+Publishing a release (maintainer): bump `version` in `pyproject.toml`, run `uv lock`, add an item to the top of
+`news.json` (`date`, `title`, `body`, optional `version` and `tag`), push. News-only posts need no version bump.
+The update source is `launcher.repo` / `launcher.branch` in `config/settings.yaml` and `$Repo` / `$Branch` in
+`install.ps1`; the repo has to be public.
+
 ## Daily use: the studio
 
 ```powershell

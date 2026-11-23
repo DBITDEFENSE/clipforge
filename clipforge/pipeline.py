@@ -19,14 +19,34 @@ from .transcribe import transcribe
 console = Console()
 
 
-def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: Path, notes: str = "") -> dict:
+def _moments(story: Story | None, work: Path) -> tuple[list[dict], Path | None]:
+    """Source-footage candidates for the director (empty when the channel has footage off or nothing is on disk)."""
+    from . import footage
+
+    try:
+        fc = footage.config()
+        if story is None or fc["footage"] == "off" or int(fc["max_source_clips"]) <= 0:
+            return [], None
+        ms = footage.moments(story)
+        (work / "moments.json").write_text(json.dumps(ms, indent=1), encoding="utf-8")
+        return ms, footage.contact_sheet(ms, work / "moments.jpg") if ms else None
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[yellow]source footage skipped ({str(e)[:160]})[/]")
+        return [], None
+
+
+def _direct_or_fallback(script: Script, words: list[Word], short_id: str, work: Path, notes: str = "",
+                        story: Story | None = None) -> dict:
     """Claude-directed shots; on any failure, the deterministic planner. Always returns a validated doc."""
     try:
         console.print(f"[cyan]direct[/] {short_id}")
-        plan = director.direct(script, words, short_id, notes)
+        ms, sheet = _moments(story, work)
+        if ms:
+            console.print(f"  {len(ms)} source moments offered")
+        plan = director.direct(script, words, short_id, notes, ms, sheet)
         (work / "shot_plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
         try:
-            doc, notes = director.to_doc(plan, script, words, short_id, work)
+            doc, notes = director.to_doc(plan, script, words, short_id, work, ms)
         finally:
             from . import videogen
 
@@ -83,6 +103,26 @@ def transcribe_pending() -> list[dict]:
     return batch
 
 
+def clip_credit(doc: dict) -> str:
+    """'Clips: Mad Hat - <url>' for every source video shown on screen ('' when none). A local file with no URL is
+    credited by its uploader and title instead."""
+    seen: dict[str, str] = {}
+    for s in doc["shots"]:
+        pr = s["props"]
+        if s["type"] != "broll" or not pr.get("source"):
+            continue
+        url, label, title = pr.get("credit_url") or "", pr.get("credit") or "source", pr.get("credit_title") or ""
+        key = url or title or label
+        if key not in seen:
+            seen[key] = f"{label} - {url}" if url else (f"{label}: {title}" if title and title[:40] != label else (title or label))
+    return ("Clips: " + "; ".join(seen.values())) if seen else ""
+
+
+def with_clip_credit(caption: str, clip_line: str, sep: str = "\n\n") -> str:
+    """The post caption with the clip credit appended (unchanged when there is none)."""
+    return f"{caption}{sep}{clip_line}" if clip_line else caption
+
+
 def _sources_txt(story: Story) -> str:
     lines = [f"Story: {story.topic}", ""]
     for ref in story.sources:
@@ -126,7 +166,7 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
             doc = json.loads((work / "shots.json").read_text(encoding="utf-8"))
             shots.validate(doc)
         else:
-            doc = _direct_or_fallback(script, words, short_id, work, director_notes)
+            doc = _direct_or_fallback(script, words, short_id, work, director_notes, story)
             doc = _add_meme(doc, script, short_id, work)
         shots_path = work / "shots.json"
         shots_path.write_text(json.dumps(doc, indent=1), encoding="utf-8")
@@ -149,13 +189,17 @@ def produce(short_id: str, batch_id: str, story: Story, script: Script, day: int
         for f in ("final.mp4", "cover.png", "shots.json", "words.json", "vo.mp3"):
             shutil.copy2(work / f, out / f)
         p = script.post
+        clip_line = clip_credit(doc)
         (out / "caption.txt").write_text(
-            f"{p.caption}\n\n{' '.join(p.hashtags)}\n\n--- pinned comment ---\n{p.pinned_comment}\n\n--- cover ---\n{p.cover_title}\n",
+            f"{with_clip_credit(p.caption, clip_line)}\n\n{' '.join(p.hashtags)}\n\n--- pinned comment ---\n{p.pinned_comment}\n\n--- cover ---\n{p.cover_title}\n",
             encoding="utf-8")
         (out / "hooks.json").write_text(json.dumps([h.model_dump() for h in script.hooks], indent=2), encoding="utf-8")
         (out / "script.md").write_text(write.script_markdown(script, story), encoding="utf-8")
-        credits = sorted({s["props"]["credit"] for s in doc["shots"] if s["type"] == "broll" and s["props"].get("credit")})
-        src_txt = _sources_txt(story) + ("\n\nB-roll (Pexels license):\n" + "\n".join(f"- {c}" for c in credits) if credits else "")
+        credits = sorted({s["props"]["credit"] for s in doc["shots"]
+                          if s["type"] == "broll" and s["props"].get("credit") and not s["props"].get("source")})
+        src_txt = _sources_txt(story) + ("\n\nB-roll:\n" + "\n".join(f"- {c}" for c in credits) if credits else "")
+        if clip_line:
+            src_txt += f"\n\n{clip_line}"
         src_txt += f"\n\nShot planner: {doc.get('planner', 'built-in')}"
         (out / "sources.txt").write_text(src_txt, encoding="utf-8")
         (out / "qa.json").write_text(json.dumps(report | {"finish": fin}, indent=2), encoding="utf-8")

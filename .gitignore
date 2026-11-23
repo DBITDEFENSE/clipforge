@@ -17,3 +17,4 @@ assets/gameplay/*
 !assets/gameplay/.gitkeep
 render/node_modules/
 render/out/
+config/backup/

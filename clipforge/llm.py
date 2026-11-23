@@ -43,9 +43,16 @@ def log_cost(stage: str, ref: str, model: str, usage) -> float:
 
 
 def structured(system: str, user: str, schema: type[T], *, stage: str, ref: str, effort: str = "high",
-               max_tokens: int = 16000) -> T:
+               max_tokens: int = 16000, images: list | None = None) -> T:
     """One Claude call that must return `schema`. Raises ClaudeRefused if the whole fallback chain declines."""
     cfg = settings()["claude"]
+    content = user
+    if images:  # local image files (jpg/png) shown before the text
+        import base64
+
+        content = [{"type": "image", "source": {"type": "base64", "media_type": "image/png" if str(p).endswith(".png") else "image/jpeg",
+                                                "data": base64.b64encode(open(p, "rb").read()).decode()}} for p in images]
+        content.append({"type": "text", "text": user})
     kwargs = {}
     if cfg.get("fallbacks"):
         kwargs = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": cfg["fallbacks"]}
@@ -53,7 +60,7 @@ def structured(system: str, user: str, schema: type[T], *, stage: str, ref: str,
         model=cfg["model"],
         max_tokens=max_tokens,
         system=system,
-        messages=[{"role": "user", "content": user}],
+        messages=[{"role": "user", "content": content}],
         output_config={"effort": effort},
         output_format=schema,
         **kwargs,
