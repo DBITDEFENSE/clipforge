@@ -5,9 +5,15 @@
   local_wan  Wan on your GPU via diffusers (Apache-2.0, free): 2.1 1.3B (480p, ~75 s/clip) or 2.2 5B (720p, sharper)
   fal        any fal.ai text-to-video model (FAL_KEY): Kling, Veo, Hailuo, Wan 2.2, LTX, Seedance...
   replicate  any Replicate text-to-video model (REPLICATE_API_TOKEN)
+  gemini     Google Gemini Omni Flash via the Interactions API (GEMINI_API_KEY)
+  higgsfield Higgsfield text-to-video models (HF_API_KEY_ID + HF_API_KEY_SECRET): Seedance, Kling...
+
+The channel picks one engine plus an ordered list of backups (`fallbacks`). When the first one fails (out of credits,
+rate limited, model down) the next one that has a key is tried, so a short still gets its clips. An engine that fails
+with an auth/quota/rate-limit error is skipped for the rest of the run.
 
 Clips are cached by (engine, model, prompt). Paid engines log an estimated cost per clip to data/costs.csv and are
-capped by `max_clips` per short. Any failure returns None and the shot falls back to motion graphics.
+capped by `max_clips` per short. If every engine fails the shot falls back to motion graphics.
 """
 from __future__ import annotations
 
@@ -29,7 +35,14 @@ ENGINES = {
     "local_wan": "Local AI video: Wan (free, your GPU)",
     "fal": "fal.ai video models (paid, your key)",
     "replicate": "Replicate video models (paid, your key)",
+    "gemini": "Google Gemini video (paid, your key)",
+    "higgsfield": "Higgsfield video models (paid, your key)",
 }
+AI_ENGINES = ("local_wan", "fal", "replicate", "gemini", "higgsfield")
+# .env names each engine needs (all must be set). local_wan needs none.
+KEYS = {"pexels": ["PEXELS_API_KEY"], "fal": ["FAL_KEY"], "replicate": ["REPLICATE_API_TOKEN"], "gemini": ["GEMINI_API_KEY"],
+        "higgsfield": ["HF_API_KEY_ID", "HF_API_KEY_SECRET"]}
+CLIP_SECONDS = 5  # asked of the hosted models that take a duration
 # Suggested model ids (providers rename/add models often; any text-to-video id works). tier is a rough price class.
 MODELS = {
     "fal": [
@@ -46,6 +59,15 @@ MODELS = {
         {"id": "wan-video/wan-2.2-t2v-fast", "name": "Wan 2.2 fast", "tier": "$"},
         {"id": "bytedance/seedance-1-lite", "name": "Seedance 1 Lite", "tier": "$"},
     ],
+    "gemini": [
+        {"id": "gemini-omni-1.2-flash", "name": "Gemini Omni Flash 1.2 (720p)", "tier": "$$"},
+    ],
+    "higgsfield": [
+        {"id": "bytedance/seedance-2.0/text-to-video", "name": "Seedance 2.0", "tier": "$$"},
+        {"id": "kling-video/v3.0/std/text-to-video", "name": "Kling 3.0 Standard", "tier": "$$"},
+        {"id": "kling-video/v3.0-turbo/text-to-video", "name": "Kling 3.0 Turbo", "tier": "$"},
+        {"id": "kling-video/v3.0/pro/text-to-video", "name": "Kling 3.0 Pro", "tier": "$$$"},
+    ],
     "local_wan": [
         {"id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "name": "Wan 2.1 1.3B: 480p, fast (~75 s/clip)", "tier": "free"},
         {"id": "Wan-AI/Wan2.2-TI2V-5B-Diffusers", "name": "Wan 2.2 5B: 720p, sharper (~3-5 min/clip)", "tier": "free"},
@@ -59,7 +81,8 @@ LOCAL = {
     "Wan-AI/Wan2.2-TI2V-5B-Diffusers": {"h": 1280, "w": 704, "frames": 61, "fps": 24, "guidance": 5.0, "offload": True,
                                         "min_gb": 22, "shared_te": WAN21},
 }
-DEFAULTS = {"engine": "pexels", "model": "", "max_clips": 2, "cost_per_clip": 0.30, "quality": "fast"}
+DEFAULTS = {"engine": "pexels", "model": "", "max_clips": 2, "cost_per_clip": 0.30, "quality": "fast",
+            "fallbacks": [], "engine_models": {}}
 NEGATIVE = "text, captions, watermark, logo, subtitles, blurry, low quality, distorted face, extra fingers, static image"
 
 
@@ -75,11 +98,33 @@ def config() -> dict:
         c["engine"] = "pexels"
     if not c["model"] and MODELS.get(c["engine"]):
         c["model"] = MODELS[c["engine"]][0]["id"]
+    c["fallbacks"] = [e for e in (c.get("fallbacks") or []) if e in ENGINES and e not in ("none", c["engine"])]
+    c["engine_models"] = dict(c.get("engine_models") or {})
     return c
 
 
 def wants_ai(c: dict | None = None) -> bool:
-    return (c or config())["engine"] in ("local_wan", "fal", "replicate")
+    return (c or config())["engine"] in AI_ENGINES
+
+
+def has_keys(engine: str) -> bool:
+    return all(secret(k, False) for k in KEYS.get(engine, []))
+
+
+def model_for(engine: str, c: dict) -> str:
+    """The model this channel uses on `engine`: the selected one, the one last picked there, or the first suggestion."""
+    if engine == c["engine"] and c.get("model"):
+        return c["model"]
+    return (c.get("engine_models") or {}).get(engine) or (MODELS[engine][0]["id"] if MODELS.get(engine) else "")
+
+
+def chain(c: dict | None = None) -> list[tuple[str, str]]:
+    """AI engines to try in order, as (engine, model): the selected engine, then the backups. Empty when the channel's
+    engine isn't an AI one (stock or graphics only)."""
+    c = c or config()
+    if c["engine"] not in AI_ENGINES:
+        return []
+    return [(e, model_for(e, c)) for e in [c["engine"], *(c.get("fallbacks") or [])] if e in AI_ENGINES]
 
 
 def _cache_path(engine: str, model: str, prompt: str) -> Path:
@@ -164,6 +209,54 @@ def _replicate(model: str, prompt: str, dst: Path, timeout_s: int = 900) -> Path
     if not url:
         raise RuntimeError(f"replicate returned no video: {str(p.get('output'))[:300]}")
     return _download(url, dst, {"Authorization": h["Authorization"]})
+
+
+def _gemini(model: str, prompt: str, dst: Path) -> Path:
+    """Gemini Omni Flash through the Interactions API: one request, the MP4 comes back base64 in the response."""
+    import base64
+
+    r = httpx.post("https://generativelanguage.googleapis.com/v1beta/interactions",
+                   headers={"x-goog-api-key": secret("GEMINI_API_KEY"), "Content-Type": "application/json"},
+                   json={"model": model, "input": prompt, "store": False,
+                         "response_format": {"type": "video", "aspect_ratio": "9:16", "duration": f"{CLIP_SECONDS}s", "resolution": "720p"}},
+                   timeout=900)
+    if r.status_code >= 300:
+        raise RuntimeError(f"gemini {r.status_code}: {r.text[:300]}")
+    res = r.json()
+    if res.get("status") in ("failed", "cancelled", "incomplete"):
+        raise RuntimeError(f"gemini {res.get('status')}: {str(res.get('errors'))[:300]}")
+    for step in res.get("steps") or []:
+        for part in (step.get("content") or []) if isinstance(step, dict) else []:
+            if isinstance(part, dict) and part.get("type") == "video":
+                if part.get("data"):
+                    dst.write_bytes(base64.b64decode(part["data"]))
+                    return dst
+                if part.get("uri"):
+                    return _download(part["uri"], dst, {"x-goog-api-key": secret("GEMINI_API_KEY")})
+    raise RuntimeError(f"gemini returned no video: {str(res)[:300]}")
+
+
+def _higgsfield(model: str, prompt: str, dst: Path, timeout_s: int = 900) -> Path:
+    h = {"Authorization": f"Key {secret('HF_API_KEY_ID')}:{secret('HF_API_KEY_SECRET')}", "Content-Type": "application/json"}
+    body = {"prompt": prompt, "duration": CLIP_SECONDS, "aspect_ratio": "9:16"}
+    if model.startswith("bytedance/seedance"):  # schemas are strict per model; only Seedance's extra fields are known
+        body |= {"resolution": "720p", "generate_audio": False}
+    r = httpx.post(f"https://api.higgsfield.ai/{model.strip('/')}", headers=h, json=body, timeout=60)
+    if r.status_code >= 300:
+        raise RuntimeError(f"higgsfield submit {r.status_code}: {r.text[:300]}")
+    sub, t0 = r.json(), time.time()
+    st = sub
+    while st.get("status") in ("queued", "in_progress"):
+        if time.time() - t0 > timeout_s:
+            raise TimeoutError("higgsfield generation timed out")
+        time.sleep(4)
+        st = httpx.get(sub["status_url"], headers=h, timeout=30).json()
+    if st.get("status") != "completed":
+        raise RuntimeError(f"higgsfield {st.get('status')}: {st.get('error') or st.get('detail')}")
+    url = (st.get("video") or {}).get("url") or _find_video_url(st)
+    if not url:
+        raise RuntimeError(f"higgsfield returned no video: {str(st)[:300]}")
+    return _download(url, dst)
 
 
 _WAN = None
@@ -268,28 +361,41 @@ def release() -> None:
         torch.cuda.empty_cache()
 
 
+_DOWN: set[str] = set()  # engines that hit an auth/quota/rate-limit error in this process: don't keep retrying them
+_LIMIT_HINTS = ("401", "402", "403", "429", "quota", "credit", "rate limit", "billing", "insufficient", "exhausted", "is not set")
+
+
+def _run(engine: str, model: str, prompt: str, tmp: Path, quality: str) -> None:
+    if engine == "local_wan":
+        _local_wan(model, prompt, tmp, quality)
+    else:
+        globals()[f"_{engine}"](model, prompt, tmp)  # _fal, _replicate, _gemini, _higgsfield
+
+
 def generate(prompt: str, dst: Path, ref: str = "", c: dict | None = None) -> tuple[Path, str] | None:
-    """AI clip for `prompt` -> dst. Returns (path, credit label) or None. Cached; never raises."""
+    """AI clip for `prompt` -> dst, trying the channel's engine and then its backups. Returns (path, credit label) or
+    None. Cached per engine; never raises."""
     c = c or config()
-    engine, model = c["engine"], c["model"]
-    if engine not in ("local_wan", "fal", "replicate") or not prompt.strip():
+    if not prompt.strip():
         return None
     CACHE.mkdir(parents=True, exist_ok=True)
-    cached = _cache_path(engine, model, prompt)
-    try:
-        if not cached.exists():
-            tmp = cached.with_suffix(".part.mp4")
-            if engine == "fal":
-                _fal(model, prompt, tmp)
-            elif engine == "replicate":
-                _replicate(model, prompt, tmp)
-            else:
-                _local_wan(model, prompt, tmp, c.get("quality", "fast"))
-            tmp.replace(cached)
-            _log_cost(engine, model, ref, 0.0 if engine == "local_wan" else float(c.get("cost_per_clip", 0.3)))
-        shutil.copy2(cached, dst)
-        name = next((m["name"] for m in MODELS.get(engine, []) if m["id"] == model), model)
-        return dst, f"AI-generated video ({name})"
-    except Exception as e:  # noqa: BLE001
-        print(f"  video model failed ({engine}:{model}): {str(e)[:200]}")
-        return None
+    engines = chain(c)
+    for n, (engine, model) in enumerate(engines):
+        if engine in _DOWN or not has_keys(engine):
+            continue
+        cached = _cache_path(engine, model, prompt)
+        try:
+            if not cached.exists():
+                tmp = cached.with_suffix(".part.mp4")
+                _run(engine, model, prompt, tmp, c.get("quality", "fast"))
+                tmp.replace(cached)
+                _log_cost(engine, model, ref, 0.0 if engine == "local_wan" else float(c.get("cost_per_clip", 0.3)))
+            shutil.copy2(cached, dst)
+            name = next((m["name"] for m in MODELS.get(engine, []) if m["id"] == model), model)
+            return dst, f"AI-generated video ({name})"
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            if any(h in msg.lower() for h in _LIMIT_HINTS):
+                _DOWN.add(engine)
+            print(f"  video model failed ({engine}:{model}): {msg[:200]}" + ("; trying the next one" if n + 1 < len(engines) else ""))
+    return None

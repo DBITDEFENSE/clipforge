@@ -242,15 +242,15 @@ def remix(short_id: str) -> dict:
     return {"id": short_id, "status": status, "music": fin["music"]}
 
 
-def run(voice_provider: str | None = None) -> list[dict]:
+def run(voice_provider: str | None = None, target: int | None = None) -> list[dict]:
     batch = transcribe_pending()
     if not batch:
         console.print("Nothing new in inbox/. Drop videos there or use `clipforge add <url>`.")
         return []
     batch_id = time.strftime("%Y%m%d-%H%M%S")
     console.print(f"[cyan]mine[/] {len(batch)} transcript(s) -> stories (batch {batch_id})")
-    stories = mine.mine(batch_id, batch)
-    picks = mine.pick(batch_id, stories, len(batch))
+    stories = mine.mine(batch_id, batch, target)
+    picks = mine.pick(batch_id, stories, len(batch), target)
     for v in batch:
         db.set_video_status(v["hash"], "mined")
     console.print(f"  {len(stories)} stories found, {len(picks)} picked")

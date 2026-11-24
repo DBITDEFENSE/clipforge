@@ -24,6 +24,11 @@ script:
   min_words: 58                  # ~30s with the local drawl voice (it speaks a bit slower)
   max_words: 76
 
+ingest:
+  # Parts cut out of every downloaded video before it is transcribed (looked up on SponsorBlock, a community database).
+  # [] keeps everything. Also available: intro, outro, preview, music_offtopic, filler.
+  skip_segments: [sponsor, selfpromo, interaction]
+
 transcribe:
   model: large-v3
   language: en

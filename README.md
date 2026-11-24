@@ -48,6 +48,19 @@ How posting works:
 - **YouTube** uploads right after you approve, as private with `publishAt`, so YouTube publishes it on time even if the studio is closed.
 - **TikTok** has no scheduling API, so the studio posts at the slot time **while it's running** (or run `clipforge publish-due` from Task Scheduler). The approve dialog follows TikTok's required posting UX (account shown, privacy with no default, interaction toggles, commercial disclosure, consent line). Until TikTok audits your app, posts are private-only.
 
+- **My algorithm (Make tab)**: connect a channel to your YouTube (pick the browser you're signed in with, or upload a
+  cookies.txt export; Firefox works best because Chrome and Edge lock their cookies on Windows). ClipForge reads your home
+  recommendations and subscriptions, ranks them by the channels in your likes and history, plus your "more of" / "never
+  use" words, and makes a batch of shorts (15 by default) from the best videos. Tick videos in the feed to choose them
+  yourself, or let it run daily with Autopilot. Each channel has its own sign-in, so several YouTube accounts can feed
+  several channels. Cookies stay in `data/cookies/` on this PC. CLI: `clipforge --account <id> algo [--shorts 15] [--dry-run]`.
+- **No ads in the sources**: every download has its sponsor reads, self-promo and "like and subscribe" segments cut out
+  (SponsorBlock, `ingest.skip_segments` in settings), so they never reach the transcript, the stories or the clips.
+- **Formats (Settings > Formats)**: 16 built-in short formats (news flash, gameplay commentary, tutorial, explainer, top 3,
+  myth vs fact, hot take, story time, versus, by the numbers, timeline, reaction, tool spotlight, warning, what if,
+  behind the scenes). Auto picks the best fit per story; or lock a channel to one.
+- **Backup video models (Settings > Visuals)**: besides the main B-roll engine, tick backups (local Wan, fal.ai,
+  Replicate, Google Gemini, Higgsfield, Pexels). When one fails or runs out of credits the next one with a key takes over.
 - **Local voice (free)**: Kokoro-82M runs on the GPU. Settings → Voice has presets (Radio cowboy, Trail boss, ...), two-narrator
   blend, pace, pitch, warmth/grit, expressiveness, pauses, and a Southern/country accent (phoneme-level drawl: off / light / full).
 - **AI meme**: every short gets a meme written by a dedicated Claude pass (nope/yep, expectation vs reality, galaxy brain,

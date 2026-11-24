@@ -51,7 +51,10 @@ def problems(script: Script) -> list[str]:
 
 def write(story_id: str, story: Story) -> Script:
     cfg = settings()
-    system = PROMPT_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"])) + _channel()
+    from . import templates
+
+    system = (PROMPT_TMPL.replace("{min_words}", str(cfg["script"]["min_words"])).replace("{max_words}", str(cfg["script"]["max_words"]))
+              + _channel() + templates.writer_note(templates.assign(story_id, story)))
     user = (f"Story:\n{story.model_dump_json(indent=2)}\n\n"
             f"Source excerpts (research only; do not reuse wording):\n{_excerpts(story)}")
     script = structured(system, user, Script, stage="write", ref=story_id, effort=cfg["claude"]["effort_write"])

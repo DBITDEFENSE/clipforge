@@ -5,6 +5,7 @@ Per channel (stored in the account's visuals JSON):
   clip_style         restyle prompt ('' = the channel's default look)
   restyle_strength   0.2-0.8: how far Wan moves away from the source frames
   max_source_clips   cap per short
+  max_clip_seconds   longest single clip (2-10 s)
 
 Flow: moments(story) lists ~4-8 s windows of the source transcript around where the story is discussed, contact_sheet()
 shows the director one frame per window, the director picks windows for `clip` shots, cut() renders each one as a
@@ -32,10 +33,12 @@ STYLES = {
     "cyber-cowboy": "neo-western cyberpunk comic book illustration, cel shaded, bold ink outlines, dusty amber and neon teal palette",
     "default": "stylized animated illustration, cel shaded, bold ink outlines, rich saturated colors",
 }
-DEFAULTS = {"footage": "clips", "clip_style": "", "restyle_strength": 0.5, "max_source_clips": 4}
+DEFAULTS = {"footage": "clips", "clip_style": "", "restyle_strength": 0.5, "max_source_clips": 4, "max_clip_seconds": 5.0}
+CLIP_S_RANGE = (2.0, 10.0)
+MAX_CLIPS = 10
 V_W, V_H = 1080, 1920
 FG_MAX_H = 810  # the source frame is at most a 4:3 centre crop, centred in the layout's content zone
-MAX_CLIP_S = 5.0  # longest single clip; the rest of a longer beat falls back to a graphic
+MAX_CLIP_S = 5.0  # default longest single clip (per channel: max_clip_seconds); the rest of a longer beat falls back to a graphic
 R_W, R_H, R_FPS, R_MAX = 832, 480, 16, 81  # Wan 2.1 1.3B landscape input; 81 frames = ~5 s
 
 
@@ -47,6 +50,7 @@ def config(account: str | None = None) -> dict:
     c = DEFAULTS | {k: vis[k] for k in DEFAULTS if vis.get(k) is not None}
     if c["footage"] not in MODES:
         c["footage"] = DEFAULTS["footage"]
+    c["max_clip_seconds"] = max(CLIP_S_RANGE[0], min(CLIP_S_RANGE[1], float(c["max_clip_seconds"])))
     c["style_effective"] = c["clip_style"] or STYLES.get(acc["id"], STYLES["default"])
     return c
 
@@ -159,9 +163,9 @@ def contact_sheet(ms: list[dict], dst: Path, cols: int = 5) -> Path | None:
 
 
 # ---------- cutting ----------
-def clip_seconds(m: dict, want: float) -> float:
-    """How long a clip of moment `m` may run: what the shot wants, capped at MAX_CLIP_S and just past the moment's end."""
-    return max(0.8, min(float(want), MAX_CLIP_S, max(2.0, m["end"] - m["start"] + 0.6)))
+def clip_seconds(m: dict, want: float, cap: float = MAX_CLIP_S) -> float:
+    """How long a clip of moment `m` may run: what the shot wants, capped at `cap` and just past the moment's end."""
+    return max(0.8, min(float(want), float(cap), max(2.0, m["end"] - m["start"] + 0.6)))
 
 
 def frame_box(layout: dict | None) -> dict:

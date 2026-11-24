@@ -239,9 +239,56 @@ function vMake() {
   </div><div class="panel"><h3 style="margin-bottom:12px">Jobs</h3>
     <div class="jobs">${S.jobs.length ? S.jobs.map(j => `<div class="job" onclick="openJob='${j.id}';lastRender='';render()"><span class="dot ${j.status}"></span><div class="grow">${esc(j.label)}<div class="note" style="margin:0">${j.status}${j.ended && j.started ? ` · ${Math.max(1, Math.round((j.ended - j.started) / 60))} min` : ''}</div></div></div>`).join('') : '<div class="muted small">Nothing yet. Jobs run one at a time; you can leave this page.</div>'}</div>
   </div></div>
+  ${algoPanel()}
   ${autopilotPanel()}
   ${job ? `<h2>${esc(job.label)} · ${job.status}</h2><details ${job.status === 'failed' ? 'open' : ''}><summary>Show the technical log</summary><div class="log" id="log">loading…</div></details>` : ''}`;
 }
+let AL = null, ALF = null, ALsel = new Set(), ALbusy = false;
+async function loadAL() { try { AL = await api('/api/algo'); lastRender = ''; render(); } catch (e) { AL = {error: e.message}; } }
+const fmtDur = s => s ? (s >= 3600 ? Math.floor(s / 3600) + ':' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') : Math.floor(s / 60)) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : '';
+function algoPanel() {
+  if (!AL) { loadAL(); return ''; }
+  if (AL.error) return '';
+  const c = AL.config, on = AL.connected, need = Math.max(1, Math.ceil(c.shorts / AL.per_video));
+  const connect = `<div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap"><select id="al-browser" style="width:170px"><option value="">Pick your browser…</option>${AL.browsers.map(b => `<option value="${b}" ${c.browser === b ? 'selected' : ''}>${b[0].toUpperCase() + b.slice(1)}</option>`).join('')}</select>
+      <input type="text" id="al-profile" value="${esc(c.profile)}" placeholder="browser profile (optional)" style="width:210px"><button class="btn sm" onclick="alConnect()">Use this browser</button>
+      <span class="muted small">or</span><button class="btn sm ghost" onclick="$('#al-file').click()">Upload cookies.txt</button><input type="file" id="al-file" accept=".txt" hidden onchange="alCookies(this)"></div>
+    <p class="note">Sign in to YouTube in that browser first; ClipForge reads its YouTube cookies on this PC and never asks for your password. Firefox works best: Chrome and Edge lock their cookies on Windows, so for those export a cookies.txt (any "cookies.txt" browser extension) and upload it. Each channel here can use a different YouTube account.</p>`;
+  const feed = !ALF ? '' : ALF.error ? `<p class="note w">${esc(ALF.error)}</p>` : `${(ALF.errors || []).map(e => `<p class="note w">${esc(e)}</p>`).join('')}
+    <div class="row" style="margin:14px 0 8px"><b class="grow">${ALF.videos.length} videos from your feed${ALF.profile_channels ? ` · ranked with ${ALF.profile_channels} channels you watch` : ''}</b>
+      <button class="btn sm ghost" onclick="ALsel=new Set(ALF.videos.slice(0, ${need}).map(v=>v.id));lastRender='';render()">Top ${need}</button><button class="btn sm ghost" onclick="ALsel=new Set();lastRender='';render()">Clear</button></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">${ALF.videos.map(v => `<label class="card" style="cursor:pointer;${ALsel.has(v.id) ? 'outline:2px solid var(--accent)' : ''}">
+      <div style="position:relative"><img loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block" alt="">
+        <input type="checkbox" ${ALsel.has(v.id) ? 'checked' : ''} onchange="this.checked?ALsel.add('${esc(v.id)}'):ALsel.delete('${esc(v.id)}');lastRender='';render()" style="position:absolute;top:8px;left:8px;width:20px;height:20px;accent-color:var(--accent)">
+        ${v.duration ? `<span class="pill" style="position:absolute;bottom:6px;right:6px;background:#000c">${fmtDur(v.duration)}</span>` : ''}</div>
+      <div style="padding:8px 10px"><div class="small" style="font-weight:700;line-height:1.3">${esc(v.title.slice(0, 80))}</div><div class="note" style="margin:3px 0 0">${esc(v.channel)}${v.fan ? ' · <span style="color:var(--accent)">you watch them</span>' : ''} · ${esc(v.feed.replace('_', ' '))}</div></div></label>`).join('') || '<div class="note">Nothing new that fits your filters.</div>'}</div>`;
+  const picked = ALsel.size;
+  return `<h2>My algorithm</h2><div class="panel"><div class="row"><div class="grow"><h3>Shorts from your own YouTube feed</h3><p class="note" style="margin:4px 0 0">ClipForge looks at what YouTube recommends you and what your subscriptions posted, ranks it by the channels you actually watch, downloads the best videos with the sponsor reads cut out, and makes ${esc(ME.name)} shorts from them.</p></div>
+      ${on ? `<span class="pill ok">connected · ${on === 'file' ? 'cookies.txt' : esc(c.browser)}</span><button class="btn sm ghost" onclick="alDisconnect()">Disconnect</button>` : '<span class="pill">not connected</span>'}</div>
+    ${on ? '' : connect}
+    ${on ? `<div class="row" style="margin-top:14px;gap:18px;flex-wrap:wrap">
+      <label class="row small" style="gap:8px">Shorts per run <input type="text" value="${c.shorts}" style="width:64px" onchange="alCfg({shorts:parseInt(this.value)||15})"></label>
+      <label class="row small" style="gap:8px">Video length <input type="text" value="${c.min_minutes}" style="width:56px" onchange="alCfg({min_minutes:parseInt(this.value)||0})"> to <input type="text" value="${c.max_minutes}" style="width:56px" onchange="alCfg({max_minutes:parseInt(this.value)||45})"> min</label>
+      <label class="chk small" style="margin:0"><input type="checkbox" ${c.daily ? 'checked' : ''} onchange="alCfg({daily:this.checked})"> Run every day with Autopilot</label></div>
+    <div class="row" style="margin-top:8px;gap:14px;flex-wrap:wrap">${Object.entries(AL.feeds).map(([k, l]) => `<label class="chk small" style="margin:0"><input type="checkbox" ${c.feeds.includes(k) ? 'checked' : ''} onchange="alFeed('${k}', this.checked)"> ${esc(l)}</label>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px"><div><label class="f">More of <small>words or channel names, comma-separated</small></label><input type="text" value="${esc(c.boost.join(', '))}" placeholder="speedrun, AI, kernel" onchange="alCfg({boost:this.value})"></div>
+      <div><label class="f">Never use <small>words or channel names</small></label><input type="text" value="${esc(c.block.join(', '))}" placeholder="podcast, reaction, #shorts" onchange="alCfg({block:this.value})"></div></div>
+    <div class="row" style="margin-top:16px;flex-wrap:wrap"><button class="btn big" onclick="alRun()">▶ Make ${c.shorts} shorts ${picked ? `from ${picked} picked video${picked > 1 ? 's' : ''}` : 'from my feed'}</button>
+      <button class="btn ghost" ${ALbusy ? 'disabled' : ''} onclick="alFeedLoad(false)">${ALbusy ? 'Reading your feed…' : (ALF ? 'Refresh feed' : 'Show my feed')}</button>
+      ${ALF && !ALF.error ? `<button class="btn ghost" ${ALbusy ? 'disabled' : ''} onclick="alFeedLoad(true)">Relearn my taste</button>` : ''}
+      <span class="note" style="margin:0">${c.shorts} shorts needs about ${need} video${need > 1 ? 's' : ''} (${AL.per_video} stories each).</span></div>
+    ${feed}` : ''}</div>`;
+}
+async function alCfg(v) { try { AL.config = (await api('/api/algo/config', v)).config; lastRender = ''; render(); } catch (e) { toast(e.message, true); } }
+function alFeed(k, on) { const f = new Set(AL.config.feeds); on ? f.add(k) : f.delete(k); alCfg({feeds: [...f]}); }
+async function alConnect() { const b = $('#al-browser').value; if (!b) return toast('Pick the browser you use for YouTube', true);
+  try { await api('/api/algo/config', {browser: b, profile: $('#al-profile').value}); AL = null; ALF = null; await loadAL(); alFeedLoad(false); } catch (e) { toast(e.message, true); } }
+async function alCookies(inp) { const f = inp.files[0]; if (!f) return; try { const j = await api('/api/algo/cookies', {text: await f.text()}); toast('Connected (' + j.cookies + ' YouTube cookies)'); AL = null; ALF = null; await loadAL(); alFeedLoad(false); } catch (e) { toast(e.message, true); } inp.value = ''; }
+async function alDisconnect() { if (!confirm('Disconnect YouTube from ' + ME.name + '? The saved cookies are deleted.')) return; await api('/api/algo/disconnect', {}); AL = null; ALF = null; ALsel = new Set(); loadAL(); }
+async function alFeedLoad(refresh) { ALbusy = true; lastRender = ''; render();
+  try { const r = await fetch('/api/algo/feed?n=48' + (refresh ? '&refresh=1' : '')); ALF = await r.json(); } catch (e) { ALF = {error: e.message}; }
+  ALbusy = false; ALsel = new Set(); lastRender = ''; render(); }
+async function alRun() { try { const j = await api('/api/algo/run', {shorts: AL.config.shorts, ids: [...ALsel]}); openJob = j.id; ALsel = new Set(); toast('Started. Shorts land in Review as they finish.'); refresh(); } catch (e) { toast(e.message, true); } }
 let AP = null;
 async function loadAP() { try { AP = await api('/api/autopilot'); lastRender = ''; render(); } catch (e) { AP = {error: e.message}; } }
 function autopilotPanel() {
@@ -466,8 +513,8 @@ async function markAd(id, status) { let spend = null; if (status === 'boosted') 
 async function loadConn() { try { C = await api('/api/connections'); lastRender = ''; render(); } catch (e) {} }
 async function loadVoices() { try { V = await api('/api/voices'); ELsel = {...V.style}; ELprev = null; lastRender = ''; render(); } catch (e) { V = {error: e.message}; lastRender = ''; render(); } }
 function vSettings() {
-  const side = [['channel', 'Channel'], ['voice', 'Voice'], ['visuals', 'Visuals, video & music'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
-  const body = {channel: sChannel, voice: sVoice, visuals: sVisuals, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
+  const side = [['channel', 'Channel'], ['voice', 'Voice'], ['visuals', 'Visuals, video & music'], ['formats', 'Formats (templates)'], ['platforms', 'YouTube & TikTok'], ['security', 'Password']];
+  const body = {channel: sChannel, voice: sVoice, visuals: sVisuals, formats: sFormats, platforms: sPlatforms, security: sSecurity}[setTab] || sChannel;
   return `<h1>Settings</h1><p class="sub">Everything here applies to <b>${esc(ME.name)}</b> only.</p>
   <div class="set"><div class="side">${side.map(([k, l]) => `<a class="${setTab === k ? 'on' : ''}" onclick="setTab='${k}';lastRender='';render()">${l}</a>`).join('')}</div><div>${body()}</div></div>`;
 }
@@ -592,18 +639,38 @@ function sPlatforms() {
   <div class="panel"><h3>Pipeline keys</h3><div class="row" style="gap:6px;margin-top:10px"><span class="pill ${C.anthropic ? 'ok' : 'bad'}">Claude ${C.anthropic ? '✓' : '✗'}</span><span class="pill ${C.elevenlabs ? 'ok' : 'bad'}">ElevenLabs ${C.elevenlabs ? '✓' : '✗'}</span><span class="pill ${C.pexels ? 'ok' : ''}">Stock B-roll ${C.pexels ? '✓' : '(optional)'}</span></div>
     <p class="note">Change these with <code>uv run clipforge setup</code>.</p></div></div>`;
 }
+let TPL = null;
+async function loadTpl() { try { TPL = await api('/api/templates'); lastRender = ''; render(); } catch (e) { TPL = {error: e.message}; } }
+async function saveTpl(v) { try { await api('/api/templates', v); TPL = null; loadTpl(); } catch (e) { toast(e.message, true); } }
+function tplToggle(id, on) { const s = new Set(TPL.config.enabled); on ? s.add(id) : s.delete(id); if (!s.size) return toast('Keep at least one format on', true); saveTpl({enabled: [...s]}); }
+function sFormats() {
+  if (!TPL) { loadTpl(); return '<div class="panel">Loading…</div>'; }
+  if (TPL.error) return `<div class="panel note w">${esc(TPL.error)}</div>`;
+  const c = TPL.config, auto = c.mode === 'auto';
+  return `<div class="panel"><h3>Short formats</h3><p class="note" style="margin:6px 0 12px">Ready-made shapes for a short: how the script is built and which visuals it leans on (gameplay clips, step cards, countdowns, stat stacks…). ${TPL.templates.length} are built in.</p>
+    <div class="tabs" style="margin:0 0 6px"><button class="tab ${auto ? 'on' : ''}" onclick="saveTpl({mode:'auto'})">Auto: best fit per story</button><button class="tab ${auto ? '' : 'on'}" onclick="saveTpl({mode:'fixed'})">Always the same one</button></div>
+    <p class="note" style="margin:0 0 12px">${auto ? 'Each story gets the format that fits it best out of the ones switched on; ties rotate so a batch stays varied.' : 'Every short uses the selected format.'}</p>
+    ${TPL.templates.map(t => { const on = auto ? c.enabled.includes(t.id) : c.fixed === t.id;
+      return `<label class="voice ${on ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="${auto ? 'checkbox' : 'radio'}" name="tpl" ${on ? 'checked' : ''} onchange="${auto ? `tplToggle('${t.id}', this.checked)` : `saveTpl({fixed:'${t.id}'})`}" style="accent-color:var(--accent);width:18px;height:18px">
+        <div><b>${esc(t.name)}</b>${t.cats.map(x => ` <span class="pill">${esc(x)}</span>`).join('')}<div class="note" style="margin:2px 0 0">${esc(t.desc)}</div></div></label>`; }).join('')}
+    ${auto ? `<div class="row"><button class="btn sm ghost" onclick="saveTpl({enabled:TPL.templates.map(t=>t.id)})">All on</button></div>` : ''}</div>`;
+}
 let VIS = null;
 async function loadVis() { try { VIS = await api('/api/visuals'); lastRender = ''; render(); } catch (e) { VIS = {error: e.message}; } }
 function sVisuals() {
   if (!VIS) { loadVis(); return '<div class="panel">Loading…</div>'; }
   if (VIS.error) return `<div class="panel note w">${esc(VIS.error)}</div>`;
   const c = VIS.config, eng = c.engine, models = VIS.models[eng] || [];
-  const keyFor = {fal: ['FAL_KEY', VIS.keys.fal, 'https://fal.ai/dashboard/keys'], replicate: ['REPLICATE_API_TOKEN', VIS.keys.replicate, 'https://replicate.com/account/api-tokens'], pexels: ['PEXELS_API_KEY', VIS.keys.pexels, 'https://www.pexels.com/api/']}[eng];
+  const KEY_URL = {fal: 'https://fal.ai/dashboard/keys', replicate: 'https://replicate.com/account/api-tokens', pexels: 'https://www.pexels.com/api/', gemini: 'https://aistudio.google.com/apikey', higgsfield: 'https://console.higgsfield.ai'};
+  const keyBox = e => (VIS.key_names[e] || []).length ? `<label class="f">${esc(VIS.engines[e])} key ${VIS.keys[e] ? '<span class="pill ok">saved</span>' : `<small><a href="${KEY_URL[e]}" target="_blank">get a key</a></small>`}</label><div class="row" style="flex-wrap:wrap">${VIS.key_names[e].map(n => `<input type="text" id="vis-key-${n}" placeholder="${VIS.keys[e] ? n + ' saved (paste to replace)' : n}" style="flex:1;min-width:180px">`).join('')}<button class="btn sm" onclick="saveVisKey('${e}')">Save key</button></div>` : '';
+  const backups = Object.keys(VIS.engines).filter(k => k !== 'none' && k !== eng);
   const desc = {none: 'Only animated graphics, memes and text. Fastest, zero cost.', pexels: 'Real licensed stock clips (free key from Pexels).',
     local_wan: 'Generates original clips on your RTX 5090 with open-source Wan. Free. Pick 2.1 (480p, ~75 s per clip) or 2.2 (720p, sharper, slower) below.',
     fal: 'One fal.ai key unlocks many hosted models (Kling, Veo, Hailuo, Wan 2.2, LTX, Seedance). You pay fal per clip.',
-    replicate: 'One Replicate key unlocks many hosted models. You pay Replicate per clip.'};
-  const ai = ['local_wan', 'fal', 'replicate'].includes(eng);
+    replicate: 'One Replicate key unlocks many hosted models. You pay Replicate per clip.',
+    gemini: 'Google\'s Gemini Omni Flash video model with your Gemini API key (paid tier). About $0.35 per 5 s clip at 720p.',
+    higgsfield: 'Higgsfield\'s API: Seedance 2.0, Kling 3.0 and more with one key pair. You pay Higgsfield per clip.'};
+  const ai = VIS.ai_engines.includes(eng);
   return `${footagePanel()}<div class="panel" style="margin-top:16px"><h3>B-roll source</h3><p class="note" style="margin:6px 0 14px">What fills the "show, don't tell" moments between graphics. The director writes a prompt for each clip; anything that fails falls back to motion graphics.</p>
     ${Object.entries(VIS.engines).map(([k, l]) => `<label class="voice ${eng === k ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="radio" name="eng" ${eng === k ? 'checked' : ''} onchange="saveVis({engine:'${k}', model:''})" style="accent-color:var(--accent);width:18px;height:18px">
       <div><b>${esc(l)}</b>${k === 'local_wan' ? (VIS.local_ready ? ' <span class="pill ok">downloaded</span>' : ' <span class="pill warn">downloads on first use</span>') : ''}<div class="note" style="margin:2px 0 0">${desc[k]}</div></div></label>`).join('')}
@@ -614,7 +681,12 @@ function sVisuals() {
       <div><label class="f">Max AI clips per short <small>${c.max_clips}</small></label><input type="range" min="0" max="5" step="1" value="${c.max_clips}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_clips:parseInt(this.value)})"></div>
       ${eng === 'local_wan' ? `<div><label class="f">Quality</label><div class="tabs" style="margin:0">${['fast', 'normal', 'best'].map(q => `<button class="tab ${c.quality === q ? 'on' : ''}" onclick="saveVis({quality:'${q}'})">${q}</button>`).join('')}</div></div>`
         : `<div><label class="f">Est. cost per clip <small>for the cost log, USD</small></label><input type="text" value="${c.cost_per_clip}" onchange="saveVis({cost_per_clip:parseFloat(this.value)||0})"></div>`}</div>` : ''}
-    ${keyFor ? `<label class="f">${keyFor[0]} ${keyFor[1] ? '<span class="pill ok">saved</span>' : `<small><a href="${keyFor[2]}" target="_blank">get a key</a></small>`}</label><div class="row"><input type="text" id="vis-key" placeholder="${keyFor[1] ? 'saved (paste to replace)' : 'paste key'}" style="flex:1"><button class="btn sm" onclick="saveVisKey('${keyFor[0]}')">Save key</button></div>` : ''}
+    ${keyBox(eng)}
+    ${ai ? `<label class="f">Backups <small>if ${esc(VIS.engines[eng].split(':')[0].split('(')[0].trim())} fails or runs out of credits, these are tried in the order you tick them</small></label>
+      ${backups.map(k => { const i = c.fallbacks.indexOf(k), on = i >= 0, free = !(VIS.key_names[k] || []).length;
+        return `<label class="chk"><input type="checkbox" ${on ? 'checked' : ''} onchange="visBackup('${k}', this.checked)"> ${on ? `<b style="color:var(--accent)">${i + 1}.</b> ` : ''}${esc(VIS.engines[k])} ${free ? '<span class="pill ok">no key needed</span>' : (VIS.keys[k] ? '<span class="pill ok">key saved</span>' : '<span class="pill warn">needs a key</span>')}</label>`; }).join('')}
+      ${c.fallbacks.filter(k => !VIS.keys[k] && (VIS.key_names[k] || []).length).map(keyBox).join('')}
+      <p class="note">Order now: ${[eng, ...c.fallbacks].map(k => esc(VIS.engines[k].split(':')[0].split('(')[0].trim())).join(' → ')} → motion graphics. Engines without a key are skipped.</p>` : ''}
     ${ai ? `<label class="f">Try it <small>generates one clip with this model</small></label><div class="row"><input type="text" id="vis-prompt" placeholder="Cinematic vertical shot of a cowboy silhouette walking past glowing server racks at dusk" style="flex:1"><button class="btn sm alt" onclick="testVis()">Generate test clip</button></div>
       ${VIS.samples.length ? `<div class="grid" style="margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${VIS.samples.map(u => `<video src="${u}" controls muted loop style="width:100%;aspect-ratio:9/16;border-radius:12px;background:#000"></video>`).join('')}</div>` : ''}` : ''}
   </div>
@@ -625,10 +697,11 @@ function sVisuals() {
 }
 function footagePanel() {
   const f = VIS.footage, m = f.footage;
-  return `<div class="panel"><h3>Clips from the source video</h3><p class="note" style="margin:6px 0 14px">The director looks at the video you fed in and drops in short real moments (news footage, an on-screen headline, the demo, the thing being talked about), up to 5 s each, muted under your narration, with an on-screen credit and a "Clips:" line in the post. They back up your commentary; they don't replace the video.</p>
+  return `<div class="panel"><h3>Clips from the source video</h3><p class="note" style="margin:6px 0 14px">The director looks at the video you fed in and drops in short real moments (gameplay, a tutorial step on screen, news footage, an on-screen headline, the demo, the thing being talked about), up to ${f.max_clip_seconds} s each, muted under your narration, with an on-screen credit and a "Clips:" line in the post. They back up your commentary; they don't replace the video.</p>
     ${Object.entries(VIS.footage_modes).map(([k, l]) => `<label class="voice ${m === k ? 'cur' : ''}" style="cursor:pointer;grid-template-columns:auto 1fr"><input type="radio" name="foot" ${m === k ? 'checked' : ''} onchange="saveVis({footage:'${k}'})" style="accent-color:var(--accent);width:18px;height:18px"><div><b>${{off: 'Off', clips: 'Clips', restyled: 'Clips, restyled'}[k]}</b><div class="note" style="margin:2px 0 0">${esc(l)}</div></div></label>`).join('')}
     ${m !== 'off' ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px">
-      <div><label class="f">Max clips per short <small>${f.max_source_clips}</small></label><input type="range" min="0" max="6" step="1" value="${f.max_source_clips}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_source_clips:parseInt(this.value)})"></div>
+      <div><label class="f">Max clips per short <small>${f.max_source_clips}</small></label><input type="range" min="0" max="${VIS.max_clips_limit}" step="1" value="${f.max_source_clips}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_source_clips:parseInt(this.value)})"></div>
+      <div><label class="f">Longest clip <small>${f.max_clip_seconds} s</small></label><input type="range" min="${VIS.clip_s_range[0]}" max="${VIS.clip_s_range[1]}" step="1" value="${f.max_clip_seconds}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({max_clip_seconds:parseFloat(this.value)})"></div>
       ${m === 'restyled' ? `<div><label class="f">Restyle strength <small>${f.restyle_strength} · low keeps the original, high reimagines it</small></label><input type="range" min="0.2" max="0.8" step="0.05" value="${f.restyle_strength}" style="width:100%;accent-color:var(--accent)" onchange="saveVis({restyle_strength:parseFloat(this.value)})"></div>` : '<div></div>'}</div>` : ''}
     ${m === 'restyled' ? `<label class="f">Restyle look <small>a prompt for the GPU; leave empty for the channel default</small></label><div class="row"><input type="text" id="clip-style" value="${esc(f.clip_style)}" placeholder="${esc(f.style_effective)}" style="flex:1"><button class="btn sm" onclick="saveVis({clip_style:$('#clip-style').value})">Save</button></div>` : ''}
   </div>`;
@@ -658,7 +731,10 @@ async function genMus(replace) { const n = replace ? 2 : Math.max(...MUS.moods.m
 async function applyMus() { try { const j = await api('/api/music/apply', {}); openJob = j.id; toast('Re-mixing your shorts with the music library (seconds each).'); refresh(); } catch (e) { toast(e.message, true); } }
 async function delMus(name) { if (!confirm('Delete ' + name + '?')) return; await api('/api/music/delete', {name}); MUS = null; loadMus(); }
 async function saveVis(v) { try { await api('/api/visuals', v); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
-async function saveVisKey(name) { const v = $('#vis-key').value.trim(); if (!v) return toast('Paste the key first', true); try { await api('/api/keys', {[name]: v}); toast('Key saved'); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
+function visBackup(k, on) { const f = VIS.config.fallbacks.filter(x => x !== k); if (on) f.push(k); saveVis({fallbacks: f}); }
+async function saveVisKey(eng) { const body = {}; for (const n of VIS.key_names[eng]) { const el = $('#vis-key-' + n); if (el && el.value.trim()) body[n] = el.value.trim(); }
+  if (!Object.keys(body).length) return toast('Paste the key first', true);
+  try { await api('/api/keys', body); toast('Key saved'); VIS = null; loadVis(); } catch (e) { toast(e.message, true); } }
 async function testVis() { try { const j = await api('/api/visuals/test', {prompt: $('#vis-prompt').value}); openJob = j.id; toast('Generating a test clip. Watch it on the Make tab; it appears here when done.'); refresh(); } catch (e) { toast(e.message, true); } }
 
 function sSecurity() {

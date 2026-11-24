@@ -1,6 +1,12 @@
 {
   "news": [
     {
+      "date": "2026-11-23",
+      "tag": "new",
+      "title": "My algorithm, ad-free sources, more video models, 16 formats",
+      "body": "Make tab > My algorithm: connect your YouTube and get a batch of shorts (15 by default) from your own home feed and subscriptions. Sponsor reads are cut out of every download. Settings > Visuals adds Google Gemini and Higgsfield, plus backup models that take over when one runs out. Settings > Formats has 16 ready-made short formats (gameplay commentary, tutorial, top 3, myth vs fact...). Source clips can now run up to 10 s, 10 per short."
+    },
+    {
       "date": "2026-11-22",
       "version": "0.1.0",
       "tag": "new",

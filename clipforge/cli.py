@@ -59,7 +59,7 @@ def add(
         except Exception as e:  # one bad link shouldn't sink the batch
             console.print(f"  [red]failed[/]: {e}")
     if go:
-        run(None, None, None, open_it)
+        run(None, None, None, open_it, None)
 
 
 @app.command()
@@ -68,6 +68,7 @@ def run(
     per_day: Optional[int] = typer.Option(None, help="Shorts per day (default from settings)"),
     days: Optional[int] = typer.Option(None, help="How many days of posts to plan"),
     open_it: bool = typer.Option(True, "--open/--no-open", help="Open the gallery when done"),
+    shorts: Optional[int] = typer.Option(None, help="Make exactly this many shorts from the batch (when it has enough stories)"),
 ):
     """Process everything new in inbox/ end to end."""
     ensure_dirs()
@@ -79,7 +80,7 @@ def run(
     if (voice or settings()["voice"]["provider"]) == "elevenlabs":
         secret("ELEVENLABS_API_KEY")
     t = time.time()
-    results = pipeline.run(voice)
+    results = pipeline.run(voice, shorts)
     _summary(results, time.time() - t)
     if results and open_it:
         gallery(True)
@@ -189,12 +190,76 @@ def autopilot(
         if not new:
             console.print("No new uploads.")
         return
+    for it in new:
+        console.print(f"[cyan]new[/] {it['source']}: {it['title']}")
+    from . import algo as al
+
+    if al.config(acc)["daily"] and al.connected(acc):  # the daily "my algorithm" batch rides along with autopilot
+        for it in new:
+            _download_one(it["url"])
+        algo(None, False, None, open_it)
+        return
     if not new:
         console.print("No new uploads.")
         return
-    for it in new:
-        console.print(f"[cyan]new[/] {it['source']}: {it['title']}")
     add([it["url"] for it in new], True, open_it)
+
+
+def _download_one(url: str) -> bool:
+    console.print(f"[cyan]download[/] {url}")
+    try:
+        console.print(f"  -> {ingest.download(url).name}")
+        return True
+    except Exception as e:  # noqa: BLE001  (one bad link shouldn't sink the batch)
+        console.print(f"  [red]failed[/]: {str(e)[:200]}")
+        return False
+
+
+@app.command()
+def algo(
+    shorts: Optional[int] = typer.Option(None, help="How many shorts to make (default: the channel's setting, 15)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Just show what would be used"),
+    ids: Optional[str] = typer.Option(None, help="Comma-separated YouTube video ids to use instead of the top of the feed"),
+    open_it: bool = typer.Option(False, "--open/--no-open"),
+):
+    """My algorithm: make shorts from your own YouTube feed (connect it in the studio's Make tab first)."""
+    from . import accounts
+    from . import algo as al
+
+    ensure_dirs()
+    acc = accounts.current_id()
+    n = shorts or al.config(acc)["shorts"]
+    want = al.videos_needed(n)
+    if ids:
+        picks = [{"id": i, "title": i, "channel": "", "url": f"https://www.youtube.com/watch?v={i}"}
+                 for i in ids.split(",") if i.strip() and all(ch.isalnum() or ch in "-_" for ch in i.strip())]
+        spare = picks
+    else:
+        try:
+            got = al.feed(acc, limit=want * 3 + 6)
+        except Exception as e:  # noqa: BLE001
+            console.print(f"[red]{al.explain(e)}[/]")
+            raise typer.Exit(1)
+        for err in got["errors"]:
+            console.print(f"[yellow]{err}[/]")
+        spare = al.spread(got["videos"], want * 3 + 6)
+        picks = spare[:want]
+    console.print(f"{n} shorts wanted -> {want} video(s) from your feed")
+    for it in picks:
+        console.print(f"[cyan]{'would use' if dry_run else 'picked'}[/] {it['channel'] or it['id']}: {it['title'][:80]}")
+    if dry_run:
+        return
+    if not picks:
+        console.print("Nothing new in your feed right now.")
+        return
+    ok = 0
+    for it in spare:  # videos that fail to download (members-only, removed) are replaced by the next best
+        if ok >= (len(picks) if ids else want):
+            break
+        if _download_one(it["url"]):
+            ok += 1
+        al.mark_used(acc, it)
+    run(None, None, None, open_it, n)
 
 
 @app.command("video-test")

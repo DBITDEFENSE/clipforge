@@ -337,13 +337,36 @@ class Handler(BaseHTTPRequestHandler):
 
                 acc = accounts.current_id()
                 return self._json({"config": ap.config(acc), "sources": ap.sources(acc)})
+            if path == "/api/algo":
+                from . import algo as al
+                from .config import settings as _settings
+
+                acc = accounts.current_id()
+                return self._json({"config": al.config(acc), "connected": al.connected(acc), "browsers": al.BROWSERS,
+                                   "feeds": {k: v[1] for k, v in al.FEEDS.items()},
+                                   "per_video": int(_settings()["plan"].get("per_video", 3))})
+            if path == "/api/algo/feed":
+                from . import algo as al
+
+                try:
+                    return self._json(al.feed(accounts.current_id(), limit=max(5, min(100, int(q.get("n") or 40))),
+                                              refresh_profile=q.get("refresh") == "1"))
+                except Exception as e:  # noqa: BLE001
+                    return self._json({"error": al.explain(e)}, 400)
+            if path == "/api/templates":
+                from . import templates as tp
+
+                return self._json({"config": tp.config(), "templates": [{k: t[k] for k in ("id", "name", "desc", "cats")} for t in tp.TEMPLATES]})
             if path == "/api/visuals":
                 from . import footage, videogen
 
                 samples = sorted((OUT / "_samples").glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)[:6] if (OUT / "_samples").exists() else []
                 return self._json({"config": videogen.config(), "engines": videogen.ENGINES, "models": videogen.MODELS,
-                                   "keys": {"fal": bool(secret("FAL_KEY", False)), "replicate": bool(secret("REPLICATE_API_TOKEN", False)),
-                                            "pexels": bool(secret("PEXELS_API_KEY", False))},
+                                   "keys": {e: videogen.has_keys(e) for e in videogen.KEYS},
+                                   "key_names": videogen.KEYS, "ai_engines": list(videogen.AI_ENGINES),
+                                   "chain": [{"engine": e, "model": m, "ready": e == "local_wan" or videogen.has_keys(e)}
+                                             for e, m in videogen.chain()],
+                                   "max_clips_limit": footage.MAX_CLIPS, "clip_s_range": list(footage.CLIP_S_RANGE),
                                    "local_ready": videogen.local_ready(videogen.config()["model"]) if videogen.config()["engine"] == "local_wan"
                                    else videogen.local_ready(videogen.WAN21),
                                    "local_models_ready": {m: videogen.local_ready(m) for m in videogen.LOCAL},
@@ -482,14 +505,50 @@ class Handler(BaseHTTPRequestHandler):
                 elif act == "run":
                     return self._json(JOBS.add("Autopilot: check followed channels", ["autopilot"]))
                 return self._json({"ok": True})
+            if path.startswith("/api/algo/"):
+                from . import algo as al
+
+                acc, act = accounts.current_id(), path.rsplit("/", 1)[1]
+                if act == "config":
+                    return self._json({"config": al.save_config(acc, b)})
+                if act == "cookies":
+                    try:
+                        return self._json({"ok": True, "cookies": al.save_cookies(acc, str(b.get("text") or ""))})
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, 400)
+                if act == "disconnect":
+                    al.forget_cookies(acc)
+                    al.save_config(acc, {"browser": "", "profile": ""})
+                    return self._json({"ok": True})
+                if act == "run":
+                    n = max(1, min(200, int(b.get("shorts") or al.config(acc)["shorts"])))
+                    ids = [i for i in (b.get("ids") or []) if isinstance(i, str) and re.fullmatch(r"[\w-]{6,20}", i)][:80]
+                    if not al.connected(acc) and not ids:
+                        return self._json({"error": "Connect your YouTube first."}, 400)
+                    args = ["algo", "--shorts", str(n)] + (["--ids", ",".join(ids)] if ids else [])
+                    return self._json(JOBS.add(f"My algorithm: {n} shorts", args))
+                return self._json({"error": "not found"}, 404)
+            if path == "/api/templates":
+                from . import templates as tp
+
+                accounts.update(accounts.current_id(), visuals={"templates": tp.clean(tp.config() | {k: b[k] for k in ("mode", "fixed", "enabled") if k in b})})
+                return self._json({"ok": True})
             if path == "/api/visuals":
                 from . import videogen
 
                 v = {}
+                cur_v = accounts.current().get("visuals") or {}
                 if b.get("engine") in videogen.ENGINES:
                     v["engine"] = b["engine"]
+                    if "model" in b and not b["model"]:  # switching engine: go back to the model last used on it
+                        b["model"] = (cur_v.get("engine_models") or {}).get(b["engine"], "")
                 if isinstance(b.get("model"), str) and re.fullmatch(r"[\w./:-]{0,120}", b["model"]):
                     v["model"] = b["model"]
+                    eng = v.get("engine") or videogen.config()["engine"]
+                    if b["model"]:
+                        v["engine_models"] = (cur_v.get("engine_models") or {}) | {eng: b["model"]}
+                if isinstance(b.get("fallbacks"), list):
+                    v["fallbacks"] = [e for e in dict.fromkeys(b["fallbacks"]) if e in videogen.ENGINES and e != "none"][:8]
                 if "max_clips" in b:
                     v["max_clips"] = max(0, min(5, int(b["max_clips"])))
                 if "cost_per_clip" in b:
@@ -507,7 +566,9 @@ class Handler(BaseHTTPRequestHandler):
                 if "restyle_strength" in b:
                     v["restyle_strength"] = round(max(0.2, min(0.8, float(b["restyle_strength"]))), 2)
                 if "max_source_clips" in b:
-                    v["max_source_clips"] = max(0, min(6, int(b["max_source_clips"])))
+                    v["max_source_clips"] = max(0, min(footage.MAX_CLIPS, int(b["max_source_clips"])))
+                if "max_clip_seconds" in b:
+                    v["max_clip_seconds"] = max(footage.CLIP_S_RANGE[0], min(footage.CLIP_S_RANGE[1], float(b["max_clip_seconds"])))
                 accounts.update(accounts.current_id(), visuals=v)
                 return self._json({"ok": True})
             if path == "/api/music":
@@ -577,7 +638,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if path == "/api/keys":
                 keys = {k: (b.get(k) or "").strip() for k in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET",
-                                                              "FAL_KEY", "REPLICATE_API_TOKEN", "PEXELS_API_KEY")}
+                                                              "FAL_KEY", "REPLICATE_API_TOKEN", "PEXELS_API_KEY", "GEMINI_API_KEY",
+                                                              "HF_API_KEY_ID", "HF_API_KEY_SECRET")}
                 keys = {k: v for k, v in keys.items() if v}
                 write_env(keys)
                 os.environ.update(keys)

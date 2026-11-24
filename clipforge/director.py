@@ -34,13 +34,19 @@ def direct(script: Script, words: list[Word], short_id: str, notes: str = "", mo
         fc = footage.config()
         user += (f"\n\nSOURCE FOOTAGE: real moments from the source video you can show with `clip` shots (set `clip_id`). "
                  f"The image shows one frame per moment, labelled with its id. Use {min(2, fc['max_source_clips'])}-{fc['max_source_clips']} "
-                 f"short clip shots (2-{footage.MAX_CLIP_S:.0f} s each) where the footage SHOWS what the narration says at that moment: "
-                 "news footage, an on-screen headline, article or chart, the demo, the product, the event itself. Prefer that over a "
-                 "person talking to camera; skip a moment whose frame is just a face, a title card or a sponsor read. The clip plays "
+                 f"short clip shots (2-{fc['max_clip_seconds']:.0f} s each) where the footage SHOWS what the narration says at that moment: "
+                 "gameplay (the move, the boss, the bug, the scene being described), a tutorial or screen recording at the step being "
+                 "explained, news footage, an on-screen headline, article or chart, the demo, the product, the event itself. Prefer "
+                 "that over a person talking to camera; skip a moment whose frame is just a face, a title card or a sponsor read. The clip plays "
                  "muted from the start of the moment, so pick the moment whose words match the shot. Never use the same moment twice. "
-                 f"A clip stops after {footage.MAX_CLIP_S:.0f} s; if the beat runs longer, the rest shows the shot's `text` as a "
+                 f"A clip stops after {fc['max_clip_seconds']:.0f} s; if the beat runs longer, the rest shows the shot's `text` as a "
                  "kinetic card, so give clip shots a <= 5 word `text`. Clips are not for the first 2 seconds (the hook stays graphic)."
                  f"\n\nMoments (id  source time  what's said there):\n{footage.listing(moments)}")
+    from . import templates
+
+    tpl = templates.for_short(short_id)
+    if tpl:
+        user += templates.director_note(tpl)
     if notes.strip():
         user += f"\n\nNOTES FROM THE HOST on the last cut (highest priority, apply them):\n{notes.strip()}"
     from .accounts import current
@@ -164,7 +170,7 @@ def to_doc(plan: ShotPlan, script: Script, words: list[Word], short_id: str, wor
             notes.append(f"clip {m['id']} skipped (repeat or over the cap), used kinetic")
             continue
         sf = frame_of(k)
-        cap = footage.clip_seconds(m, 1e9) * fps
+        cap = footage.clip_seconds(m, 1e9, fc.get("max_clip_seconds", footage.MAX_CLIP_S)) * fps
         until, k2 = frame_of(k + 1), k + 1  # cover whole cuts of this beat while they fit in the clip
         while k2 < len(final) and final[k2][0] is s and frame_of(k2 + 1) - sf <= cap:
             until, k2 = max(until, frame_of(k2 + 1)), k2 + 1
@@ -210,6 +216,9 @@ def to_doc(plan: ShotPlan, script: Script, words: list[Word], short_id: str, wor
                                         workdir / f"broll_{broll_n}.mp4", short_id, vc)
                 if got:
                     src, credit = got
+                elif "pexels" in vc.get("fallbacks", []):  # every AI engine failed: stock footage is the last backup
+                    src = broll.fetch(s.broll_query, workdir / f"broll_{broll_n}.mp4")
+                    credit = broll.last_credit() if src else ""
             elif vc["engine"] == "pexels":
                 src = broll.fetch(s.broll_query, workdir / f"broll_{broll_n}.mp4")
                 credit = broll.last_credit() if src else ""

@@ -33,12 +33,14 @@ def _groups(blocks: list[str]) -> list[list[str]]:
     return groups + ([cur] if cur else [])
 
 
-def mine(batch_id: str, videos: list[dict]) -> list[Story]:
+def mine(batch_id: str, videos: list[dict], target: int | None = None) -> list[Story]:
     """videos: [{hash, title, transcript}] -> stories (also saved to work/<batch>/stories.json).
     Videos that fit together are mined in one call so the same event is merged across sources."""
     from concurrent.futures import ThreadPoolExecutor
 
     per_video = settings()["plan"].get("per_video", 3)
+    if target:
+        per_video = max(per_video, -(-target // max(1, len(videos))) + 1)
     blocks = [transcript_for_prompt(v["hash"], v["title"], v["transcript"]) for v in videos]
 
     def run(i: int, group: list[str]) -> list[Story]:
@@ -57,12 +59,15 @@ def mine(batch_id: str, videos: list[dict]) -> list[Story]:
     return stories
 
 
-def pick(batch_id: str, stories: list[Story], n_videos: int = 1) -> list[tuple[str, Story, int]]:
+def pick(batch_id: str, stories: list[Story], n_videos: int = 1, target: int | None = None) -> list[tuple[str, Story, int]]:
     """Rank, de-duplicate by cluster, cap per source video, spread over posting days. Returns [(story_id, story, day)].
-    Total = max(per_day * days, per_video * videos), so a big batch yields shorts from every video."""
+    Total = max(per_day * days, per_video * videos), so a big batch yields shorts from every video. With `target`, the
+    total is exactly that many (when the stories exist): the per-video cap is loosened only as far as needed."""
     plan = settings()["plan"]
     per_video = plan.get("per_video", 3)
-    need = max(plan["per_day"] * plan["days"], per_video * n_videos)
+    need = target or max(plan["per_day"] * plan["days"], per_video * n_videos)
+    if target and n_videos:
+        per_video = max(per_video, -(-target // n_videos))
     ranked = sorted(enumerate(stories), key=lambda t: score(t[1]), reverse=True)
     seen, per_src, picks = set(), {}, []
     for i, st in ranked:

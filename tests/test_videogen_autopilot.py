@@ -13,6 +13,8 @@ def test_find_video_url_shapes():
 def test_generate_caches_logs_cost_and_never_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(videogen, "CACHE", tmp_path / "cache")
     monkeypatch.setattr(videogen, "COSTS", tmp_path / "costs.csv")
+    monkeypatch.setattr(videogen, "_DOWN", set())
+    monkeypatch.setenv("FAL_KEY", "test")  # engines without a key are skipped
     calls = []
 
     def fake_fal(model, prompt, dst, timeout_s=900):
